@@ -150,12 +150,12 @@ const initialPosts: ForumPost[] = [
 ];
 
 const places = [
-  { name: "Michigan Central", category: "Landmarks", image: "/images/places/michigan-central.jpg", x: 36, y: 61 },
-  { name: "Detroit Institute of Arts", category: "Arts", image: "/images/places/dia.jpg", x: 55, y: 31 },
-  { name: "Motown Museum", category: "Arts", image: "/images/places/motown.jpg", x: 43, y: 24 },
-  { name: "Campus Martius", category: "Things to do", image: "/images/places/campus.jpg", x: 68, y: 61 },
-  { name: "Corktown", category: "Neighborhoods", image: "/images/places/corktown.jpg", x: 45, y: 69 },
-  { name: "Southwest Detroit", category: "Neighborhoods", image: "/images/places/southwest.jpg", x: 27, y: 76 },
+  { name: "Michigan Central", category: "Landmarks", image: "images/places/michigan-central.jpg", x: 36, y: 61 },
+  { name: "Detroit Institute of Arts", category: "Arts", image: "images/places/dia.jpg", x: 55, y: 31 },
+  { name: "Motown Museum", category: "Arts", image: "images/places/motown.jpg", x: 43, y: 24 },
+  { name: "Campus Martius", category: "Things to do", image: "images/places/campus.jpg", x: 68, y: 61 },
+  { name: "Corktown", category: "Neighborhoods", image: "images/places/corktown.jpg", x: 45, y: 69 },
+  { name: "Southwest Detroit", category: "Neighborhoods", image: "images/places/southwest.jpg", x: 27, y: 76 },
 ];
 
 const navItems: Array<{ id: View; label: string }> = [
@@ -278,7 +278,7 @@ export default function HomePage() {
             </button>
           </div>
           <figure className="home-photo">
-            <img alt="Detroit skyline at dusk" src="/images/detroit-downtown-dusk.png" />
+            <img alt="Detroit skyline at dusk" src="images/detroit-downtown-dusk.png" />
           </figure>
           <div className="home-index" aria-hidden="true">
             <span>42.3314 N</span>

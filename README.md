@@ -15,5 +15,9 @@ Supabase project is connected.
 npm install
 npm run dev
 npm run build
+npm run build:static
 npm test
 ```
+
+`npm run build:static` creates the browser-only version used by the public
+client-feedback link. It contains no production credentials or client data.
