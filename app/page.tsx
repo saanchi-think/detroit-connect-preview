@@ -13,6 +13,7 @@ import {
   CircleUserRound,
   Clock3,
   Heart,
+  House,
   Languages,
   MapPin,
   MessageCircle,
@@ -362,13 +363,13 @@ const profileAvatarOptions: Array<{ id: AvatarKey; label: string }> = [
   { id: "pizza", label: "Deep dish pizza avatar" },
 ];
 
-const navItems: Array<{ id: View; label: string }> = [
-  { id: "home", label: "Home" },
-  { id: "forum", label: "Community Forum" },
-  { id: "explore", label: "Explore Detroit" },
-  { id: "friends", label: "Friends" },
-  { id: "favorites", label: "Favorites" },
-  { id: "notifications", label: "Notifications" },
+const navItems: Array<{ id: View; label: string; mobileLabel: string }> = [
+  { id: "home", label: "Home", mobileLabel: "Home" },
+  { id: "forum", label: "Community Forum", mobileLabel: "Forum" },
+  { id: "explore", label: "Explore Detroit", mobileLabel: "Explore" },
+  { id: "friends", label: "Friends", mobileLabel: "Friends" },
+  { id: "favorites", label: "Favorites", mobileLabel: "Saved" },
+  { id: "notifications", label: "Notifications", mobileLabel: "Alerts" },
 ];
 
 const friends = [
@@ -1366,8 +1367,9 @@ function Header({ activeView, isMyProfileActive, navigate, onOpenMyProfile, unre
       <nav aria-label="Primary navigation">
         {navItems.map((item) => (
           <button className={activeView === item.id ? "active" : ""} key={item.id} onClick={() => navigate(item.id)} type="button">
-            {item.id === "notifications" && <Bell aria-hidden="true" size={15} />}
-            <span>{item.label}</span>
+            <NavIcon view={item.id} />
+            <span className="nav-label nav-label-desktop">{item.label}</span>
+            <span className="nav-label nav-label-mobile">{item.mobileLabel}</span>
             {item.id === "notifications" && unreadCount > 0 && <span className="nav-notification-badge">{unreadCount}</span>}
           </button>
         ))}
@@ -1375,6 +1377,16 @@ function Header({ activeView, isMyProfileActive, navigate, onOpenMyProfile, unre
       <button className={`profile-button ${isMyProfileActive ? "active" : ""}`} onClick={onOpenMyProfile} type="button"><CircleUserRound aria-hidden="true" size={16} /> <span>My profile</span></button>
     </header>
   );
+}
+
+function NavIcon({ view }: { view: View }) {
+  const props = { "aria-hidden": true, className: "nav-item-icon", size: 17 } as const;
+  if (view === "home") return <House {...props} />;
+  if (view === "forum") return <MessageCircle {...props} />;
+  if (view === "explore") return <MapPin {...props} />;
+  if (view === "friends") return <Users {...props} />;
+  if (view === "favorites") return <Bookmark {...props} />;
+  return <Bell {...props} />;
 }
 
 function PageLead({ eyebrow, title }: { eyebrow: string; title: string }) {
