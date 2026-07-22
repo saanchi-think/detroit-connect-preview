@@ -51,6 +51,14 @@ type ForumPost = {
   comments: number;
 };
 
+type ForumComment = {
+  id: string;
+  initials: string;
+  author: string;
+  meta: string;
+  body: string;
+};
+
 const connectors: Connector[] = [
   {
     id: "maria",
@@ -150,6 +158,71 @@ const initialPosts: ForumPost[] = [
   },
 ];
 
+const initialPostComments: Record<number, ForumComment[]> = {
+  1: [
+    {
+      id: "1-1",
+      initials: "JL",
+      author: "Jordan Lee",
+      meta: "8 min ago",
+      body: "Take a look at New Center and Woodbridge. Both make everyday errands manageable, and the QLINE is nearby for trips downtown.",
+    },
+    {
+      id: "1-2",
+      initials: "SB",
+      author: "Simone Brooks",
+      meta: "5 min ago",
+      body: "East English Village is quieter, but I would compare commute times carefully. Midtown may be the easiest place to start without a car.",
+    },
+    {
+      id: "1-3",
+      initials: "MR",
+      author: "Maria Rodriguez",
+      meta: "2 min ago",
+      body: "Thank you. Midtown and New Center sound like the best first two areas for her to visit.",
+    },
+  ],
+  2: [
+    {
+      id: "2-1",
+      initials: "DL",
+      author: "Darnell Lee",
+      meta: "21 min ago",
+      body: "Detroit Means Business has a clear startup checklist. I would also contact the Buildings, Safety Engineering and Environmental Department before signing a kitchen lease.",
+    },
+    {
+      id: "2-2",
+      initials: "NK",
+      author: "Nia King",
+      meta: "14 min ago",
+      body: "Eastern Market's food business resources are useful for pop-ups and can help explain which permits apply to temporary events.",
+    },
+  ],
+  3: [
+    {
+      id: "3-1",
+      initials: "AH",
+      author: "Aisha Hassan",
+      meta: "48 min ago",
+      body: "Start utilities before move-in day, then update your license and voter registration. Parking rules depend on the neighborhood and building.",
+    },
+    {
+      id: "3-2",
+      initials: "TC",
+      author: "Theo Carter",
+      meta: "39 min ago",
+      body: "Join your neighborhood association early. It is often the fastest way to learn trash schedules, block clubs, and trusted local services.",
+    },
+    {
+      id: "3-3",
+      initials: "EP",
+      author: "Elena Patel",
+      meta: "26 min ago",
+      body: "I would add changing your vehicle insurance address to the first-week list so your coverage stays accurate.",
+    },
+  ],
+};
+
 const places = [
   { name: "Michigan Central", category: "Landmarks", image: "images/places/michigan-central.jpg", x: 36, y: 61 },
   { name: "Detroit Institute of Arts", category: "Arts", image: "images/places/dia.jpg", x: 55, y: 31 },
@@ -181,7 +254,7 @@ export default function HomePage() {
   const [posts, setPosts] = useState(initialPosts);
   const [openCommentPost, setOpenCommentPost] = useState<number | null>(null);
   const [openSharePost, setOpenSharePost] = useState<number | null>(null);
-  const [postComments, setPostComments] = useState<Record<number, string[]>>({});
+  const [postComments, setPostComments] = useState<Record<number, ForumComment[]>>(initialPostComments);
   const [forumTopic, setForumTopic] = useState("All");
   const [exploreFilter, setExploreFilter] = useState("All");
   const [selectedPlace, setSelectedPlace] = useState(places[0]);
@@ -256,12 +329,20 @@ export default function HomePage() {
 
     setPostComments((current) => ({
       ...current,
-      [postId]: [...(current[postId] ?? []), body],
+      [postId]: [
+        ...(current[postId] ?? []),
+        {
+          id: `${postId}-${Date.now()}`,
+          initials: "YOU",
+          author: "You",
+          meta: "Just now",
+          body,
+        },
+      ],
     }));
     setPosts((current) => current.map((post) => (
       post.id === postId ? { ...post, comments: post.comments + 1 } : post
     )));
-    setOpenCommentPost(null);
     event.currentTarget.reset();
     announce("Comment posted");
   }
@@ -453,7 +534,7 @@ export default function HomePage() {
                       onClick={() => setOpenCommentPost((current) => current === post.id ? null : post.id)}
                       type="button"
                     >
-                      <MessageCircle size={16} /> Comment <span>{post.comments}</span>
+                      <MessageCircle size={16} /> Comments <span>{post.comments}</span>
                     </button>
                     <button
                       aria-expanded={openSharePost === post.id}
@@ -475,20 +556,30 @@ export default function HomePage() {
                     </div>
                   )}
                   {openCommentPost === post.id && (
-                    <form className="comment-form" onSubmit={(event) => submitComment(event, post.id)}>
-                      <textarea aria-label={`Comment on ${post.title}`} name="comment" placeholder="Add a helpful reply" required />
-                      <div>
-                        <button onClick={() => setOpenCommentPost(null)} type="button">Cancel</button>
-                        <button type="submit">Post comment</button>
+                    <section className="comment-thread" aria-label={`Comments on ${post.title}`}>
+                      <div className="comment-thread-heading">
+                        <strong>Recent comments</strong>
+                        <span>{post.comments}</span>
                       </div>
-                    </form>
+                      {(postComments[post.id] ?? []).map((comment) => (
+                        <div className="comment-entry" key={comment.id}>
+                          <span>{comment.initials}</span>
+                          <div>
+                            <strong>{comment.author}</strong>
+                            <small>{comment.meta}</small>
+                            <p>{comment.body}</p>
+                          </div>
+                        </div>
+                      ))}
+                      <form className="comment-form" onSubmit={(event) => submitComment(event, post.id)}>
+                        <textarea aria-label={`Comment on ${post.title}`} name="comment" placeholder="Add a helpful reply" required />
+                        <div>
+                          <button onClick={() => setOpenCommentPost(null)} type="button">Close</button>
+                          <button type="submit">Post comment</button>
+                        </div>
+                      </form>
+                    </section>
                   )}
-                  {(postComments[post.id] ?? []).map((comment, index) => (
-                    <div className="comment-entry" key={`${post.id}-${index}`}>
-                      <span>YOU</span>
-                      <div><strong>You</strong><p>{comment}</p></div>
-                    </div>
-                  ))}
                 </article>
               ))}
             </div>
