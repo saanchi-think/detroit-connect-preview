@@ -37,6 +37,9 @@ type Connector = {
   initials: string;
   color: string;
   recommendedBy?: string;
+  friendRecommendations?: string[];
+  experience?: string;
+  workedWithNote?: string;
 };
 
 type ForumPost = {
@@ -68,7 +71,10 @@ const connectors: Connector[] = [
     topics: ["Housing", "Schools", "Neighborhoods"],
     initials: "MR",
     color: "blue",
-    recommendedBy: "Priya and 2 friends",
+    recommendedBy: "Priya Lawson + 2 friends",
+    friendRecommendations: ["Priya Lawson", "Jordan Smith"],
+    experience: "Priya worked with Maria during a Midtown rental search and praised her neighborhood guidance.",
+    workedWithNote: "Helped with a Midtown rental search · May 2026",
   },
   {
     id: "darnell",
@@ -80,6 +86,8 @@ const connectors: Connector[] = [
     initials: "DT",
     color: "gold",
     recommendedBy: "Marcus Lee",
+    friendRecommendations: ["Marcus Lee"],
+    experience: "Marcus relied on Darnell for permit and tax guidance while launching a small business.",
   },
   {
     id: "aisha",
@@ -90,6 +98,9 @@ const connectors: Connector[] = [
     topics: ["Medical", "Childcare", "City services"],
     initials: "AH",
     color: "purple",
+    recommendedBy: "Jordan Smith",
+    friendRecommendations: ["Jordan Smith"],
+    experience: "Jordan recommends Aisha for navigating childcare and family health resources.",
   },
   {
     id: "motor-city-moving",
@@ -100,7 +111,10 @@ const connectors: Connector[] = [
     topics: ["Moving", "Storage", "Utilities"],
     initials: "MM",
     color: "coral",
-    recommendedBy: "4 community members",
+    recommendedBy: "Priya Lawson + 3 others",
+    friendRecommendations: ["Priya Lawson", "Marcus Lee"],
+    experience: "Priya and Marcus both used this team for local moves and noted their clear communication.",
+    workedWithNote: "Handled an apartment move · April 2026",
   },
   {
     id: "detroit-housing-network",
@@ -254,6 +268,12 @@ const navItems: Array<{ id: View; label: string }> = [
   { id: "favorites", label: "Favorites" },
 ];
 
+const friends = [
+  { initials: "PL", name: "Priya Lawson", area: "Midtown" },
+  { initials: "ML", name: "Marcus Lee", area: "East Village" },
+  { initials: "JS", name: "Jordan Smith", area: "Corktown" },
+];
+
 function TypeIcon({ type }: { type: ConnectorType }) {
   if (type === "Vendor") return <Store size={15} />;
   if (type === "Organization") return <Building2 size={15} />;
@@ -266,6 +286,9 @@ export default function HomePage() {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"All" | ConnectorType>("All");
   const [saved, setSaved] = useState(() => new Set(["maria"]));
+  const [workedWith, setWorkedWith] = useState(() => new Set(["maria", "motor-city-moving"]));
+  const [friendView, setFriendView] = useState<"recommendations" | "worked">("recommendations");
+  const [selectedFriend, setSelectedFriend] = useState("All friends");
   const [posts, setPosts] = useState(initialPosts);
   const [openCommentPost, setOpenCommentPost] = useState<number | null>(null);
   const [openSharePost, setOpenSharePost] = useState<number | null>(null);
@@ -286,6 +309,11 @@ export default function HomePage() {
   }, [directoryConnectors, query, typeFilter]);
 
   const favoriteConnectors = directoryConnectors.filter((connector) => saved.has(connector.id));
+  const recommendedConnectors = directoryConnectors.filter((connector) => {
+    if (!connector.friendRecommendations?.length) return false;
+    return selectedFriend === "All friends" || connector.friendRecommendations.includes(selectedFriend);
+  });
+  const workedWithConnectors = directoryConnectors.filter((connector) => workedWith.has(connector.id));
   const visiblePosts = forumTopic === "All" ? posts : posts.filter((post) => post.topic === forumTopic);
 
   function announce(message: string) {
@@ -312,6 +340,20 @@ export default function HomePage() {
       } else {
         next.add(id);
         announce("Saved to favorites");
+      }
+      return next;
+    });
+  }
+
+  function toggleWorkedWith(id: string) {
+    setWorkedWith((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+        announce("Removed from worked-with history");
+      } else {
+        next.add(id);
+        announce("Added to worked-with history");
       }
       return next;
     });
@@ -488,7 +530,7 @@ export default function HomePage() {
             <span>{filteredConnectors.length} trusted profiles</span>
             {query && <button onClick={() => setQuery("")} type="button">Clear search</button>}
           </div>
-          <ConnectorGrid connectors={filteredConnectors} saved={saved} toggleFavorite={toggleFavorite} announce={announce} />
+          <ConnectorGrid connectors={filteredConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} announce={announce} />
         </section>
       )}
 
@@ -504,7 +546,7 @@ export default function HomePage() {
         <section className="content-view" aria-labelledby="favorites-title">
           <PageLead eyebrow="Your shortlist" title="Favorites" />
           {favoriteConnectors.length ? (
-            <ConnectorGrid connectors={favoriteConnectors} saved={saved} toggleFavorite={toggleFavorite} announce={announce} />
+            <ConnectorGrid connectors={favoriteConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} announce={announce} />
           ) : (
             <EmptyState
               icon={<Bookmark size={24} />}
@@ -518,27 +560,80 @@ export default function HomePage() {
 
       {view === "friends" && (
         <section className="content-view friends-view" aria-labelledby="friends-title">
-          <PageLead eyebrow="Trusted by your circle" title="Recommendations" />
+          <PageLead eyebrow="Trusted connections" title="Your network" />
           <div className="friends-layout">
-            <section className="recommendations" aria-label="Friend recommendations">
-              <div className="section-label"><Star size={17} /> Recommended by people you know</div>
-              <ConnectorGrid connectors={directoryConnectors.filter((item) => item.recommendedBy)} saved={saved} toggleFavorite={toggleFavorite} announce={announce} />
+            <section className="recommendations" aria-label="Connections and recommendations">
+              <div className="friend-view-tabs" role="tablist" aria-label="Network views">
+                <button
+                  aria-selected={friendView === "recommendations"}
+                  className={friendView === "recommendations" ? "active" : ""}
+                  onClick={() => setFriendView("recommendations")}
+                  role="tab"
+                  type="button"
+                >
+                  <Users size={16} /> Friends&apos; recommendations <span>{recommendedConnectors.length}</span>
+                </button>
+                <button
+                  aria-selected={friendView === "worked"}
+                  className={friendView === "worked" ? "active" : ""}
+                  onClick={() => setFriendView("worked")}
+                  role="tab"
+                  type="button"
+                >
+                  <Check size={16} /> Worked with <span>{workedWithConnectors.length}</span>
+                </button>
+              </div>
+
+              {friendView === "recommendations" ? (
+                <>
+                  <div className="section-label"><Star size={17} /> {selectedFriend === "All friends" ? "Recommended by people you know" : `Recommended by ${selectedFriend}`}</div>
+                  {recommendedConnectors.length ? (
+                    <ConnectorGrid connectors={recommendedConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} announce={announce} contextMode="recommendation" />
+                  ) : (
+                    <div className="network-empty">No recommendations from this friend yet.</div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="section-label"><Check size={17} /> People and services you have worked with</div>
+                  {workedWithConnectors.length ? (
+                    <ConnectorGrid connectors={workedWithConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} announce={announce} contextMode="history" />
+                  ) : (
+                    <div className="network-empty">Your worked-with history is empty.</div>
+                  )}
+                </>
+              )}
             </section>
             <aside className="friends-panel">
               <div className="aside-title">
                 <span>Your friends</span>
                 <button aria-label="Add a friend" onClick={() => announce("Friend invite copied")} type="button"><Plus size={17} /></button>
               </div>
-              {[
-                ["PL", "Priya Lawson", "Midtown"],
-                ["ML", "Marcus Lee", "East Village"],
-                ["JS", "Jordan Smith", "Corktown"],
-              ].map(([initials, name, area]) => (
-                <div className="friend-row" key={name}>
+              <button
+                className={`friend-filter-all ${selectedFriend === "All friends" ? "active" : ""}`}
+                onClick={() => {
+                  setSelectedFriend("All friends");
+                  setFriendView("recommendations");
+                }}
+                type="button"
+              >
+                All recommendations <span>{directoryConnectors.filter((item) => item.friendRecommendations?.length).length}</span>
+              </button>
+              {friends.map(({ initials, name, area }) => (
+                <button
+                  aria-pressed={selectedFriend === name}
+                  className={`friend-row ${selectedFriend === name ? "active" : ""}`}
+                  key={name}
+                  onClick={() => {
+                    setSelectedFriend(name);
+                    setFriendView("recommendations");
+                  }}
+                  type="button"
+                >
                   <span>{initials}</span>
                   <div><strong>{name}</strong><small>{area}</small></div>
-                  <MessageCircle size={16} />
-                </div>
+                  <span className="friend-count">{directoryConnectors.filter((item) => item.friendRecommendations?.includes(name)).length}</span>
+                </button>
               ))}
               <button className="friend-add" onClick={() => announce("Friend invite copied")} type="button">
                 <Plus size={16} /> Add by name or email
@@ -943,7 +1038,7 @@ function PageLead({ eyebrow, title }: { eyebrow: string; title: string }) {
   return <header className="page-lead"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1></header>;
 }
 
-function ConnectorGrid({ connectors: items, saved, toggleFavorite, announce }: { connectors: Connector[]; saved: Set<string>; toggleFavorite: (id: string) => void; announce: (message: string) => void }) {
+function ConnectorGrid({ connectors: items, saved, workedWith, toggleFavorite, toggleWorkedWith, announce, contextMode }: { connectors: Connector[]; saved: Set<string>; workedWith: Set<string>; toggleFavorite: (id: string) => void; toggleWorkedWith: (id: string) => void; announce: (message: string) => void; contextMode?: "recommendation" | "history" }) {
   return (
     <div className="connector-grid">
       {items.map((connector) => (
@@ -960,7 +1055,23 @@ function ConnectorGrid({ connectors: items, saved, toggleFavorite, announce }: {
           <span className="location"><MapPin size={15} /> {connector.neighborhood}</span>
           <div className="topic-list">{connector.topics.map((topic) => <span key={topic}>{topic}</span>)}</div>
           {connector.recommendedBy && <div className="recommended"><Users size={15} /> {connector.recommendedBy}</div>}
-          <button className="view-profile" onClick={() => announce(`${connector.name}'s profile opened`)} type="button">View profile <ChevronRight size={16} /></button>
+          {contextMode === "recommendation" && connector.experience && (
+            <div className="experience-note"><Star size={15} /><p>{connector.experience}</p></div>
+          )}
+          {contextMode === "history" && (
+            <div className="experience-note history-note"><Check size={15} /><p>{connector.workedWithNote || "Saved to your worked-with history."}</p></div>
+          )}
+          <div className="connector-actions">
+            <button
+              aria-pressed={workedWith.has(connector.id)}
+              className={`worked-button ${workedWith.has(connector.id) ? "active" : ""}`}
+              onClick={() => toggleWorkedWith(connector.id)}
+              type="button"
+            >
+              <Check size={15} /> {workedWith.has(connector.id) ? "Worked with" : "Add to history"}
+            </button>
+            <button className="view-profile" onClick={() => announce(`${connector.name}'s profile opened`)} type="button">View profile <ChevronRight size={16} /></button>
+          </div>
         </article>
       ))}
     </div>
