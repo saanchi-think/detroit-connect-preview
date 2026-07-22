@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./motor-city-modern.css";
 
 export const metadata: Metadata = {
   title: "Detroit Connect | Interactive Preview",

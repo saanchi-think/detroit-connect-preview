@@ -1362,7 +1362,8 @@ function Header({ activeView, isMyProfileActive, navigate, onOpenMyProfile, unre
   return (
     <header className="topbar">
       <button className="brand" onClick={() => navigate("home")} type="button">
-        <span className="brand-mark">DC</span><span>Detroit Connect</span>
+        <span className="brand-mark">DC</span>
+        <span className="brand-copy"><strong>Detroit</strong><strong>Connect</strong></span>
       </button>
       <nav aria-label="Primary navigation">
         {navItems.map((item) => (
@@ -1390,7 +1391,20 @@ function NavIcon({ view }: { view: View }) {
 }
 
 function PageLead({ eyebrow, title }: { eyebrow: string; title: string }) {
-  return <header className="page-lead"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1></header>;
+  const pageIndex: Record<string, string> = {
+    Connectors: "01",
+    Favorites: "02",
+    "Your network": "03",
+    "Ask & Answer": "04",
+    Notifications: "05",
+  };
+
+  return (
+    <header className="page-lead">
+      <div className="page-lead-meta"><span aria-hidden="true" className="page-index">{pageIndex[title] ?? "DC"}</span><span className="eyebrow">{eyebrow}</span></div>
+      <h1>{title}</h1>
+    </header>
+  );
 }
 
 function ProfileByline({ initials, name, meta, body, kind, profile, onOpen }: { initials: string; name: string; meta: string; body?: string; kind: "post" | "comment"; profile?: Connector; onOpen: (id: string) => void }) {
