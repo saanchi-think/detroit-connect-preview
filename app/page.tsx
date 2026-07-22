@@ -179,6 +179,7 @@ export default function HomePage() {
   const [saved, setSaved] = useState(() => new Set(["maria"]));
   const [posts, setPosts] = useState(initialPosts);
   const [openCommentPost, setOpenCommentPost] = useState<number | null>(null);
+  const [openSharePost, setOpenSharePost] = useState<number | null>(null);
   const [postComments, setPostComments] = useState<Record<number, string[]>>({});
   const [forumTopic, setForumTopic] = useState("All");
   const [exploreFilter, setExploreFilter] = useState("All");
@@ -264,21 +265,13 @@ export default function HomePage() {
     announce("Comment posted");
   }
 
-  async function sharePost(post: ForumPost) {
-    const url = `${window.location.origin}${window.location.pathname}#post-${post.id}`;
+  async function copyPostLink(post: ForumPost) {
+    const url = `https://saanchi-think.github.io/detroit-connect-preview/#post-${post.id}`;
 
     try {
-      if (navigator.share) {
-        await navigator.share({ title: post.title, text: post.title, url });
-        announce("Share options opened");
-        return;
-      }
-
       await navigator.clipboard.writeText(url);
       announce("Post link copied");
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-
+    } catch {
       const textArea = document.createElement("textarea");
       textArea.value = url;
       textArea.style.position = "fixed";
@@ -454,8 +447,25 @@ export default function HomePage() {
                     >
                       <MessageCircle size={16} /> Comment <span>{post.comments}</span>
                     </button>
-                    <button onClick={() => void sharePost(post)} type="button"><Share2 size={16} /> Share</button>
+                    <button
+                      aria-expanded={openSharePost === post.id}
+                      onClick={() => setOpenSharePost((current) => current === post.id ? null : post.id)}
+                      type="button"
+                    >
+                      <Share2 size={16} /> Share
+                    </button>
                   </footer>
+                  {openSharePost === post.id && (
+                    <div className="share-panel">
+                      <input
+                        aria-label={`Share link for ${post.title}`}
+                        readOnly
+                        value={`https://saanchi-think.github.io/detroit-connect-preview/#post-${post.id}`}
+                      />
+                      <button onClick={() => void copyPostLink(post)} type="button">Copy link</button>
+                      <a href={`mailto:?subject=${encodeURIComponent(post.title)}&body=${encodeURIComponent(`Thought you might find this Detroit Connect post helpful: https://saanchi-think.github.io/detroit-connect-preview/#post-${post.id}`)}`}>Email</a>
+                    </div>
+                  )}
                   {openCommentPost === post.id && (
                     <form className="comment-form" onSubmit={(event) => submitComment(event, post.id)}>
                       <textarea aria-label={`Comment on ${post.title}`} name="comment" placeholder="Add a helpful reply" required />
