@@ -4,6 +4,7 @@
 
 import {
   ArrowLeft,
+  Bell,
   Bookmark,
   Building2,
   Check,
@@ -27,7 +28,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ExploreMap } from "./explore-map";
 
-type View = "home" | "connectors" | "connector-profile" | "forum" | "explore" | "friends" | "favorites" | "profile";
+type View = "home" | "connectors" | "connector-profile" | "forum" | "explore" | "friends" | "favorites" | "notifications" | "profile";
 type ConnectorType = "Person" | "Vendor" | "Organization";
 type AvatarKey = "tire" | "boat" | "car" | "pizza";
 
@@ -81,6 +82,17 @@ type ForumComment = {
   author: string;
   meta: string;
   body: string;
+};
+
+type AppNotification = {
+  id: string;
+  initials: string;
+  title: string;
+  detail: string;
+  time: string;
+  read: boolean;
+  profileId?: string;
+  destination?: View;
 };
 
 const connectors: Connector[] = [
@@ -274,6 +286,45 @@ const initialPostComments: Record<number, ForumComment[]> = {
   ],
 };
 
+const initialNotifications: AppNotification[] = [
+  {
+    id: "shared-maria",
+    initials: "PL",
+    title: "Priya shared Maria Rodriguez with you",
+    detail: "She helped me compare neighborhoods and understand the rental process.",
+    time: "8 min ago",
+    read: false,
+    profileId: "maria",
+  },
+  {
+    id: "recommended-darnell",
+    initials: "ML",
+    title: "Marcus recommended Darnell Thompson",
+    detail: "A trusted person for business permits and tax questions.",
+    time: "42 min ago",
+    read: false,
+    profileId: "darnell",
+  },
+  {
+    id: "forum-reply",
+    initials: "JS",
+    title: "Jordan replied to a housing conversation",
+    detail: "There is a new response in Community Forum.",
+    time: "2 hr ago",
+    read: false,
+    destination: "forum",
+  },
+  {
+    id: "friend-update",
+    initials: "AK",
+    title: "Amara King joined your network",
+    detail: "You can now see each other's recommendations and past experiences.",
+    time: "Yesterday",
+    read: true,
+    destination: "friends",
+  },
+];
+
 const helperTopics = {
   living: ["Housing", "Renting", "Buying a home", "Utilities", "Neighborhood recommendations"],
   family: ["Schools", "Childcare", "Youth programs", "College preparation"],
@@ -304,6 +355,7 @@ const navItems: Array<{ id: View; label: string }> = [
   { id: "explore", label: "Explore Detroit" },
   { id: "friends", label: "Friends" },
   { id: "favorites", label: "Favorites" },
+  { id: "notifications", label: "Notifications" },
 ];
 
 const friends = [
@@ -411,6 +463,7 @@ export default function HomePage() {
   const [openSharePost, setOpenSharePost] = useState<number | null>(null);
   const [postComments, setPostComments] = useState<Record<number, ForumComment[]>>(initialPostComments);
   const [forumTopic, setForumTopic] = useState("All");
+  const [notifications, setNotifications] = useState(initialNotifications);
   const [selectedAvatar, setSelectedAvatar] = useState<AvatarKey>("tire");
   const [toast, setToast] = useState("");
 
@@ -433,6 +486,7 @@ export default function HomePage() {
   });
   const workedWithConnectors = allProfiles.filter((connector) => workedWith.has(connector.id));
   const selectedConnector = allProfiles.find((connector) => connector.id === selectedConnectorId) ?? directoryConnectors[0];
+  const unreadNotifications = notifications.filter((notification) => !notification.read).length;
   const visiblePosts = forumTopic === "All" ? posts : posts.filter((post) => post.topic === forumTopic);
 
   useEffect(() => {
@@ -524,6 +578,15 @@ export default function HomePage() {
       }
       return next;
     });
+  }
+
+  function openNotification(notification: AppNotification) {
+    setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read: true } : item));
+    if (notification.profileId) {
+      openConnectorProfile(notification.profileId);
+      return;
+    }
+    if (notification.destination) navigate(notification.destination);
   }
 
   function submitPost(event: FormEvent<HTMLFormElement>) {
@@ -628,7 +691,7 @@ export default function HomePage() {
 
   return (
     <main className={`site-shell view-${view}`}>
-      <Header activeView={view} navigate={navigate} />
+      <Header activeView={view} navigate={navigate} unreadCount={unreadNotifications} />
 
       {view === "home" && (
         <section className="home-view" aria-labelledby="home-title">
@@ -736,6 +799,37 @@ export default function HomePage() {
               onAction={() => navigate("connectors")}
             />
           )}
+        </section>
+      )}
+
+      {view === "notifications" && (
+        <section className="content-view notifications-view" aria-labelledby="notifications-title">
+          <PageLead eyebrow="Your account" title="Notifications" />
+          <div className="notification-toolbar">
+            <span>{unreadNotifications ? `${unreadNotifications} unread` : "All caught up"}</span>
+            {unreadNotifications > 0 && (
+              <button onClick={() => setNotifications((current) => current.map((notification) => ({ ...notification, read: true })))} type="button">Mark all as read</button>
+            )}
+          </div>
+          <div className="notification-list" aria-label="Recent notifications">
+            {notifications.map((notification) => (
+              <button
+                className={`notification-row ${notification.read ? "" : "unread"}`}
+                key={notification.id}
+                onClick={() => openNotification(notification)}
+                type="button"
+              >
+                <span className="notification-avatar">{notification.initials}</span>
+                <span className="notification-copy">
+                  <strong>{notification.title}</strong>
+                  <span>{notification.detail}</span>
+                  <small>{notification.time}</small>
+                </span>
+                <span aria-label={notification.read ? undefined : "Unread"} className={`notification-dot ${notification.read ? "read" : ""}`} />
+                <ChevronRight aria-hidden="true" className="notification-chevron" size={18} />
+              </button>
+            ))}
+          </div>
         </section>
       )}
 
@@ -1215,7 +1309,7 @@ function ProfileAvatar({ avatar }: { avatar: AvatarKey }) {
   );
 }
 
-function Header({ activeView, navigate }: { activeView: View; navigate: (view: View) => void }) {
+function Header({ activeView, navigate, unreadCount }: { activeView: View; navigate: (view: View) => void; unreadCount: number }) {
   return (
     <header className="topbar">
       <button className="brand" onClick={() => navigate("home")} type="button">
@@ -1223,7 +1317,11 @@ function Header({ activeView, navigate }: { activeView: View; navigate: (view: V
       </button>
       <nav aria-label="Primary navigation">
         {navItems.map((item) => (
-          <button className={activeView === item.id ? "active" : ""} key={item.id} onClick={() => navigate(item.id)} type="button">{item.label}</button>
+          <button className={activeView === item.id ? "active" : ""} key={item.id} onClick={() => navigate(item.id)} type="button">
+            {item.id === "notifications" && <Bell aria-hidden="true" size={15} />}
+            <span>{item.label}</span>
+            {item.id === "notifications" && unreadCount > 0 && <span className="nav-notification-badge">{unreadCount}</span>}
+          </button>
         ))}
       </nav>
       <button className={`profile-button ${activeView === "profile" ? "active" : ""}`} onClick={() => navigate("profile")} type="button">Create profile</button>
