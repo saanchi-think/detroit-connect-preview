@@ -16,6 +16,7 @@ import {
   Languages,
   MapPin,
   MessageCircle,
+  Pencil,
   Plus,
   Search,
   Share2,
@@ -186,7 +187,19 @@ const communityProfiles: Connector[] = [
   { id: "elena-patel", name: "Elena Patel", role: "Detroit resident", neighborhood: "Midtown", type: "Person", topics: ["Moving", "Medical", "City services"], initials: "EP", color: "green", verificationLabel: "Detroit Connect member" },
 ];
 
-const staticProfiles = [...connectors, ...communityProfiles];
+const defaultCurrentUserProfile: Connector = {
+  id: "my-profile",
+  name: "Jamie Carter",
+  role: "Detroit community connector",
+  neighborhood: "Midtown",
+  type: "Person",
+  topics: ["Transportation", "City services", "Neighborhood recommendations"],
+  initials: "JC",
+  color: "purple",
+  verificationLabel: "Your public profile",
+};
+
+const staticProfiles = [...connectors, ...communityProfiles, defaultCurrentUserProfile];
 
 const initialPosts: ForumPost[] = [
   {
@@ -365,6 +378,17 @@ const friends = [
 ];
 
 const connectorDetails: Record<string, ConnectorDetail> = {
+  "my-profile": {
+    about: "I help newcomers get oriented in Detroit, understand local transit, and find practical neighborhood resources.",
+    neighborhoodExpertise: ["Midtown", "New Center", "Downtown"],
+    organization: "Detroit Connect community",
+    yearsConnected: "4-10 years",
+    languages: ["English"],
+    availability: ["Messages", "Coffee chats"],
+    response: "Usually responds within two days",
+    affiliations: ["Detroit Connect member network"],
+    recommendations: [],
+  },
   maria: {
     about: "I help Detroit residents and newcomers make confident decisions about housing, schools, and neighborhood life. My work connects people with practical resources and trusted local organizations.",
     neighborhoodExpertise: ["Southwest Detroit", "Corktown", "Midtown"],
@@ -449,7 +473,8 @@ function TypeIcon({ type }: { type: ConnectorType }) {
 
 export default function HomePage() {
   const [view, setView] = useState<View>("home");
-  const [directoryConnectors, setDirectoryConnectors] = useState(connectors);
+  const directoryConnectors = connectors;
+  const [currentUserProfile, setCurrentUserProfile] = useState(defaultCurrentUserProfile);
   const [selectedConnectorId, setSelectedConnectorId] = useState("maria");
   const [profileReturnView, setProfileReturnView] = useState<View>("connectors");
   const [query, setQuery] = useState("");
@@ -478,7 +503,7 @@ export default function HomePage() {
     });
   }, [directoryConnectors, query, typeFilter]);
 
-  const allProfiles = [...directoryConnectors, ...communityProfiles];
+  const allProfiles = [currentUserProfile, ...directoryConnectors, ...communityProfiles];
   const favoriteConnectors = allProfiles.filter((connector) => saved.has(connector.id));
   const recommendedConnectors = directoryConnectors.filter((connector) => {
     if (!connector.friendRecommendations?.length) return false;
@@ -652,7 +677,7 @@ export default function HomePage() {
     const profileTopics = [...topics, ...(otherTopic ? [otherTopic] : [])].slice(0, 3);
     const name = `${firstName} ${lastName}`;
     const newConnector: Connector = {
-      id: `profile-${Date.now()}`,
+      id: currentUserProfile.id,
       name,
       role: jobTitle || (type === "Person" ? "Detroit community connector" : profileType),
       neighborhood,
@@ -660,14 +685,19 @@ export default function HomePage() {
       topics: profileTopics.length ? profileTopics : ["Community support"],
       initials: `${firstName[0]}${lastName[0]}`.toUpperCase(),
       color: selectedAvatar === "car" ? "coral" : selectedAvatar === "pizza" ? "gold" : selectedAvatar === "boat" ? "blue" : "navy",
+      verificationLabel: "Your public profile",
     };
 
-    setDirectoryConnectors((current) => [newConnector, ...current]);
-    setQuery(name);
-    setTypeFilter("All");
+    setCurrentUserProfile(newConnector);
+    setSelectedConnectorId(newConnector.id);
+    setProfileReturnView("home");
     event.currentTarget.reset();
-    navigate("connectors");
-    announce("Profile created");
+    setView("connector-profile");
+    const url = new URL(window.location.href);
+    url.searchParams.set("profile", newConnector.id);
+    window.history.replaceState({}, "", url);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    announce("Profile updated");
   }
 
   async function copyPostLink(post: ForumPost) {
@@ -691,7 +721,13 @@ export default function HomePage() {
 
   return (
     <main className={`site-shell view-${view}`}>
-      <Header activeView={view} navigate={navigate} unreadCount={unreadNotifications} />
+      <Header
+        activeView={view}
+        isMyProfileActive={(view === "connector-profile" && selectedConnector.id === currentUserProfile.id) || view === "profile"}
+        navigate={navigate}
+        onOpenMyProfile={() => openConnectorProfile(currentUserProfile.id)}
+        unreadCount={unreadNotifications}
+      />
 
       {view === "home" && (
         <section className="home-view" aria-labelledby="home-title">
@@ -770,8 +806,10 @@ export default function HomePage() {
           detail={getConnectorDetail(selectedConnector)}
           isSaved={saved.has(selectedConnector.id)}
           hasWorkedWith={workedWith.has(selectedConnector.id)}
+          isOwner={selectedConnector.id === currentUserProfile.id}
           onBack={() => navigate(profileReturnView)}
           onContact={() => announce(`Contact request sent to ${selectedConnector.name}`)}
+          onEdit={() => navigate("profile")}
           onSave={() => toggleFavorite(selectedConnector.id)}
           onShare={() => void shareConnector(selectedConnector)}
           onWorkedWith={() => toggleWorkedWith(selectedConnector.id)}
@@ -780,6 +818,7 @@ export default function HomePage() {
 
       {view === "profile" && (
         <CreateProfileView
+          profile={currentUserProfile}
           onSubmit={submitProfile}
           selectedAvatar={selectedAvatar}
           setSelectedAvatar={setSelectedAvatar}
@@ -1042,19 +1081,28 @@ export default function HomePage() {
 }
 
 function CreateProfileView({
+  profile,
   onSubmit,
   selectedAvatar,
   setSelectedAvatar,
 }: {
+  profile: Connector;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   selectedAvatar: AvatarKey;
   setSelectedAvatar: (avatar: AvatarKey) => void;
 }) {
+  const [firstName, ...lastNameParts] = profile.name.split(" ");
+  const profileType = profile.type === "Vendor"
+    ? "Vendor / service provider"
+    : profile.type === "Organization"
+      ? "Community organization"
+      : "Individual helper";
+
   return (
-    <section className="create-profile-view" aria-labelledby="create-profile-title">
+    <section className="create-profile-view" aria-labelledby="edit-profile-title">
       <div className="profile-page-inner">
         <header className="profile-hero">
-          <h1 id="create-profile-title">Create profile</h1>
+          <h1 id="edit-profile-title">Edit profile</h1>
           <div className="profile-photo-orbit" aria-label="Profile picture preview">
             <div className="profile-photo-circle">
               <ProfileAvatar avatar={selectedAvatar} />
@@ -1076,7 +1124,7 @@ function CreateProfileView({
           </div>
         </header>
 
-        <form className="profile-form" aria-label="Create Detroit Connect profile" onSubmit={onSubmit}>
+        <form className="profile-form" aria-label="Edit Detroit Connect profile" onSubmit={onSubmit}>
           <section className="form-section">
             <div className="section-intro">
               <span className="step">01</span>
@@ -1085,7 +1133,7 @@ function CreateProfileView({
             <div className="field-grid two">
               <label>
                 <span>Profile type</span>
-                <select defaultValue="Individual helper" name="profileType">
+                <select defaultValue={profileType} name="profileType">
                   <option>Individual helper</option>
                   <option>Vendor / service provider</option>
                   <option>Community organization</option>
@@ -1093,7 +1141,7 @@ function CreateProfileView({
               </label>
               <label>
                 <span>Neighborhood</span>
-                <input name="neighborhood" placeholder="Southwest Detroit" required type="text" />
+                <input defaultValue={profile.neighborhood} name="neighborhood" placeholder="Southwest Detroit" required type="text" />
               </label>
               <label>
                 <span>ZIP code</span>
@@ -1138,7 +1186,7 @@ function CreateProfileView({
                   <legend>{group.label}</legend>
                   {group.topics.map((topic) => (
                     <label key={topic}>
-                      <input name="topics" type="checkbox" value={topic} /> {topic}
+                      <input defaultChecked={profile.topics.includes(topic)} name="topics" type="checkbox" value={topic} /> {topic}
                     </label>
                   ))}
                 </fieldset>
@@ -1158,11 +1206,11 @@ function CreateProfileView({
             <div className="field-grid two">
               <label>
                 <span>First name</span>
-                <input name="firstName" placeholder="Maria" required type="text" />
+                <input defaultValue={firstName} name="firstName" placeholder="Maria" required type="text" />
               </label>
               <label>
                 <span>Last name</span>
-                <input name="lastName" placeholder="Rodriguez" required type="text" />
+                <input defaultValue={lastNameParts.join(" ")} name="lastName" placeholder="Rodriguez" required type="text" />
               </label>
               <label>
                 <span>Email</span>
@@ -1199,7 +1247,7 @@ function CreateProfileView({
               </label>
               <label>
                 <span>Job title</span>
-                <input name="jobTitle" placeholder="Community Development Manager" type="text" />
+                <input defaultValue={profile.role} name="jobTitle" placeholder="Community Development Manager" type="text" />
               </label>
               <label>
                 <span>Organization type</span>
@@ -1250,7 +1298,7 @@ function CreateProfileView({
               </div>
             </div>
             <div className="action-row">
-              <button className="primary-button" type="submit">Create profile</button>
+              <button className="primary-button" type="submit">Save changes</button>
             </div>
           </section>
         </form>
@@ -1309,7 +1357,7 @@ function ProfileAvatar({ avatar }: { avatar: AvatarKey }) {
   );
 }
 
-function Header({ activeView, navigate, unreadCount }: { activeView: View; navigate: (view: View) => void; unreadCount: number }) {
+function Header({ activeView, isMyProfileActive, navigate, onOpenMyProfile, unreadCount }: { activeView: View; isMyProfileActive: boolean; navigate: (view: View) => void; onOpenMyProfile: () => void; unreadCount: number }) {
   return (
     <header className="topbar">
       <button className="brand" onClick={() => navigate("home")} type="button">
@@ -1324,7 +1372,7 @@ function Header({ activeView, navigate, unreadCount }: { activeView: View; navig
           </button>
         ))}
       </nav>
-      <button className={`profile-button ${activeView === "profile" ? "active" : ""}`} onClick={() => navigate("profile")} type="button">Create profile</button>
+      <button className={`profile-button ${isMyProfileActive ? "active" : ""}`} onClick={onOpenMyProfile} type="button"><CircleUserRound aria-hidden="true" size={16} /> <span>My profile</span></button>
     </header>
   );
 }
@@ -1405,7 +1453,7 @@ function ConnectorGrid({ connectors: items, saved, workedWith, toggleFavorite, t
   );
 }
 
-function ConnectorProfileView({ connector, detail, isSaved, hasWorkedWith, onBack, onContact, onSave, onShare, onWorkedWith }: { connector: Connector; detail: ConnectorDetail; isSaved: boolean; hasWorkedWith: boolean; onBack: () => void; onContact: () => void; onSave: () => void; onShare: () => void; onWorkedWith: () => void }) {
+function ConnectorProfileView({ connector, detail, isSaved, hasWorkedWith, isOwner, onBack, onContact, onEdit, onSave, onShare, onWorkedWith }: { connector: Connector; detail: ConnectorDetail; isSaved: boolean; hasWorkedWith: boolean; isOwner: boolean; onBack: () => void; onContact: () => void; onEdit: () => void; onSave: () => void; onShare: () => void; onWorkedWith: () => void }) {
   return (
     <section className="connector-profile-view content-view" aria-labelledby="public-profile-title">
       <button className="profile-back" onClick={onBack} type="button"><ArrowLeft size={17} /> Back</button>
@@ -1422,10 +1470,19 @@ function ConnectorProfileView({ connector, detail, isSaved, hasWorkedWith, onBac
           </div>
         </div>
         <div className="public-profile-actions" aria-label="Profile actions">
-          <button className="profile-contact" onClick={onContact} type="button"><MessageCircle size={17} /> Contact {connector.name.split(" ")[0]}</button>
-          <button className={isSaved ? "active" : ""} onClick={onSave} type="button"><Heart fill={isSaved ? "currentColor" : "none"} size={16} /> {isSaved ? "Saved" : "Save"}</button>
-          <button onClick={onShare} type="button"><Share2 size={16} /> Share</button>
-          <button className={hasWorkedWith ? "active" : ""} onClick={onWorkedWith} type="button"><Check size={16} /> {hasWorkedWith ? "Worked with" : "Add to history"}</button>
+          {isOwner ? (
+            <>
+              <button className="profile-contact" onClick={onEdit} type="button"><Pencil size={17} /> Edit profile</button>
+              <button className="owner-share" onClick={onShare} type="button"><Share2 size={16} /> Share public profile</button>
+            </>
+          ) : (
+            <>
+              <button className="profile-contact" onClick={onContact} type="button"><MessageCircle size={17} /> Contact {connector.name.split(" ")[0]}</button>
+              <button className={isSaved ? "active" : ""} onClick={onSave} type="button"><Heart fill={isSaved ? "currentColor" : "none"} size={16} /> {isSaved ? "Saved" : "Save"}</button>
+              <button onClick={onShare} type="button"><Share2 size={16} /> Share</button>
+              <button className={hasWorkedWith ? "active" : ""} onClick={onWorkedWith} type="button"><Check size={16} /> {hasWorkedWith ? "Worked with" : "Add to history"}</button>
+            </>
+          )}
         </div>
       </header>
 
