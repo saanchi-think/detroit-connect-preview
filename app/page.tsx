@@ -1267,24 +1267,21 @@ function ConnectorProfileView({ connector, detail, isSaved, hasWorkedWith, onBac
 
       <div className="public-profile-layout">
         <div className="public-profile-main">
-          <section className="profile-section" aria-labelledby="help-topics-title">
-            <span className="profile-section-index">01</span>
-            <div>
-              <h2 id="help-topics-title">Can help with</h2>
-              <div className="profile-topic-list">{connector.topics.map((topic) => <span key={topic}>{topic}</span>)}</div>
-            </div>
-          </section>
-
           <section className="profile-section" aria-labelledby="about-profile-title">
-            <span className="profile-section-index">02</span>
             <div>
               <h2 id="about-profile-title">About</h2>
               <p className="profile-about">{detail.about}</p>
             </div>
           </section>
 
+          <section className="profile-section" aria-labelledby="help-topics-title">
+            <div>
+              <h2 id="help-topics-title">Can help with</h2>
+              <div className="profile-topic-list">{connector.topics.map((topic) => <span key={topic}>{topic}</span>)}</div>
+            </div>
+          </section>
+
           <section className="profile-section" aria-labelledby="friend-experiences-title">
-            <span className="profile-section-index">03</span>
             <div>
               <h2 id="friend-experiences-title">Friends&apos; experiences</h2>
               {detail.recommendations.length ? (
