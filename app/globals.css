@@ -299,6 +299,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .forum-post h2 { font-family: Georgia, serif; font-size: 21px; margin: 18px 0 8px; }.forum-post p { color: #525a60; font-size: 13px; line-height: 1.58; margin: 0; }
 .forum-post footer { border-top: 1px solid var(--line); display: flex; gap: 16px; margin-top: 18px; padding-top: 13px; }
 .forum-post footer button { align-items: center; background: transparent; border: 0; color: #59616a; cursor: pointer; display: flex; font-size: 11px; font-weight: 700; gap: 6px; padding: 0; }.forum-post footer button span { color: var(--gold); }
+.comment-form { background: #f3efe7; border: 1px solid var(--line); border-radius: 6px; display: grid; gap: 9px; margin-top: 15px; padding: 12px; }
+.comment-form textarea { background: white; border: 1px solid var(--line); border-radius: 5px; min-height: 72px; outline: 0; padding: 11px; resize: vertical; }
+.comment-form > div { display: flex; gap: 8px; justify-content: flex-end; }
+.comment-form button { background: transparent; border: 0; border-radius: 5px; cursor: pointer; font-size: 11px; font-weight: 800; min-height: 36px; padding: 0 12px; }
+.comment-form button[type="submit"] { background: var(--navy); color: white; }
+.comment-form button[type="submit"]:hover { background: var(--purple); }
+.comment-entry { align-items: flex-start; background: #f6f2ea; border-left: 3px solid var(--gold); display: grid; gap: 10px; grid-template-columns: 34px 1fr; margin-top: 12px; padding: 11px 12px; }
+.comment-entry > span { align-items: center; background: var(--purple); border-radius: 50%; color: white; display: flex; font-size: 8px; font-weight: 850; height: 34px; justify-content: center; }
+.comment-entry strong { font-size: 11px; }.comment-entry p { color: #515a61; font-size: 12px; margin: 4px 0 0; }
 
 .explore-view { display: grid; grid-template-columns: 390px minmax(0, 1fr); min-height: 100vh; padding-top: 0; }
 .places-panel { background: var(--surface); border-right: 1px solid var(--line); padding: 120px 24px 30px; z-index: 2; }

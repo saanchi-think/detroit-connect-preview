@@ -178,6 +178,8 @@ export default function HomePage() {
   const [typeFilter, setTypeFilter] = useState<"All" | ConnectorType>("All");
   const [saved, setSaved] = useState(() => new Set(["maria"]));
   const [posts, setPosts] = useState(initialPosts);
+  const [openCommentPost, setOpenCommentPost] = useState<number | null>(null);
+  const [postComments, setPostComments] = useState<Record<number, string[]>>({});
   const [forumTopic, setForumTopic] = useState("All");
   const [exploreFilter, setExploreFilter] = useState("All");
   const [selectedPlace, setSelectedPlace] = useState(places[0]);
@@ -242,6 +244,51 @@ export default function HomePage() {
     event.currentTarget.reset();
     setForumTopic("All");
     announce("Your post is now visible");
+  }
+
+  function submitComment(event: FormEvent<HTMLFormElement>, postId: number) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const body = String(form.get("comment") || "").trim();
+    if (!body) return;
+
+    setPostComments((current) => ({
+      ...current,
+      [postId]: [...(current[postId] ?? []), body],
+    }));
+    setPosts((current) => current.map((post) => (
+      post.id === postId ? { ...post, comments: post.comments + 1 } : post
+    )));
+    setOpenCommentPost(null);
+    event.currentTarget.reset();
+    announce("Comment posted");
+  }
+
+  async function sharePost(post: ForumPost) {
+    const url = `${window.location.origin}${window.location.pathname}#post-${post.id}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: post.title, text: post.title, url });
+        announce("Share options opened");
+        return;
+      }
+
+      await navigator.clipboard.writeText(url);
+      announce("Post link copied");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+
+      const textArea = document.createElement("textarea");
+      textArea.value = url;
+      textArea.style.position = "fixed";
+      textArea.style.opacity = "0";
+      document.body.appendChild(textArea);
+      textArea.select();
+      const copied = document.execCommand("copy");
+      textArea.remove();
+      announce(copied ? "Post link copied" : "Unable to copy the link");
+    }
   }
 
   return (
@@ -391,7 +438,7 @@ export default function HomePage() {
                 </div>
               </form>
               {visiblePosts.map((post) => (
-                <article className="forum-post" key={post.id}>
+                <article className="forum-post" id={`post-${post.id}`} key={post.id}>
                   <header>
                     <span className="post-avatar">{post.initials}</span>
                     <div><strong>{post.author}</strong><small>{post.meta}</small></div>
@@ -400,9 +447,30 @@ export default function HomePage() {
                   <h2>{post.title}</h2>
                   <p>{post.body}</p>
                   <footer>
-                    <button onClick={() => announce("Comment box opened")} type="button"><MessageCircle size={16} /> Comment <span>{post.comments}</span></button>
-                    <button onClick={() => announce("Share link copied")} type="button"><Share2 size={16} /> Share</button>
+                    <button
+                      aria-expanded={openCommentPost === post.id}
+                      onClick={() => setOpenCommentPost((current) => current === post.id ? null : post.id)}
+                      type="button"
+                    >
+                      <MessageCircle size={16} /> Comment <span>{post.comments}</span>
+                    </button>
+                    <button onClick={() => void sharePost(post)} type="button"><Share2 size={16} /> Share</button>
                   </footer>
+                  {openCommentPost === post.id && (
+                    <form className="comment-form" onSubmit={(event) => submitComment(event, post.id)}>
+                      <textarea aria-label={`Comment on ${post.title}`} name="comment" placeholder="Add a helpful reply" required />
+                      <div>
+                        <button onClick={() => setOpenCommentPost(null)} type="button">Cancel</button>
+                        <button type="submit">Post comment</button>
+                      </div>
+                    </form>
+                  )}
+                  {(postComments[post.id] ?? []).map((comment, index) => (
+                    <div className="comment-entry" key={`${post.id}-${index}`}>
+                      <span>YOU</span>
+                      <div><strong>You</strong><p>{comment}</p></div>
+                    </div>
+                  ))}
                 </article>
               ))}
             </div>
