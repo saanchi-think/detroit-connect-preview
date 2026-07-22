@@ -345,20 +345,20 @@ export function ExploreMap({ onClose }: { onClose: () => void }) {
           <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" /><path d="M16 16l4 4" /></svg>
           <input
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search places, districts, food..."
+            placeholder="Search Detroit places"
             type="search"
             value={searchQuery}
           />
         </label>
         <button
           aria-expanded={filterOpen}
-          aria-label="Map filters"
+          aria-label="Show map filters"
           className="explore-filter-launch"
           onClick={() => setFilterOpen((current) => !current)}
           type="button"
         >
-          <SlidersHorizontal size={20} />
-          <span>{filters.length}</span>
+          <SlidersHorizontal aria-hidden="true" size={18} />
+          <span>Filters</span>
         </button>
         <div className={`explore-filter-row ${filterOpen ? "is-open" : ""}`} aria-label="Map filters">
           {filters.map((filter) => (

@@ -21,6 +21,6 @@ test("server-renders the Detroit Connect interactive preview", async () => {
   const html = await response.text();
   assert.match(html, /<title>Detroit Connect \| Interactive Preview<\/title>/i);
   assert.match(html, /Detroit Connect/);
-  assert.match(html, /What do you need help finding in Detroit/);
+  assert.match(html, /What do you need help with/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/i);
 });

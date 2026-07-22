@@ -19,7 +19,6 @@ import {
   MessageCircle,
   Pencil,
   Plus,
-  Search,
   Share2,
   ShieldCheck,
   Sparkles,
@@ -721,7 +720,7 @@ export default function HomePage() {
   }
 
   return (
-    <main className={`site-shell view-${view}`}>
+    <main className={`site-shell ${view === "profile" ? "view-profile-page" : `view-${view}`}`}>
       <Header
         activeView={view}
         isMyProfileActive={(view === "connector-profile" && selectedConnector.id === currentUserProfile.id) || view === "profile"}
@@ -734,29 +733,30 @@ export default function HomePage() {
         <section className="home-view" aria-labelledby="home-title">
           <div className="home-navy" aria-hidden="true" />
           <div className="home-copy">
-            <span className="eyebrow">Newcomer network / local guide / 2026</span>
+            <span className="eyebrow">Trusted local help in Detroit</span>
             <h1 id="home-title">
               <span>Detroit</span>
               <span>Connect</span>
             </h1>
-            <p>A premium relocation network for trusted local helpers, neighborhood insight, and practical guidance.</p>
+            <p>Find trusted people and local services for moving to and living in Detroit.</p>
             <form className="ai-search" onSubmit={handleSearch}>
               <label>
-                <span>AI search</span>
+                <span>Ask Detroit Connect</span>
                 <input
                   aria-label="Search Detroit Connect"
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="What do you need help finding in Detroit?"
+                  placeholder="What do you need help with?"
                   type="search"
                   value={query}
                 />
               </label>
-              <button aria-label="Search connectors" type="submit">
-                <Sparkles size={21} />
+              <button type="submit">
+                <Sparkles aria-hidden="true" size={19} />
+                <span>Search</span>
               </button>
             </form>
             <button className="browse-link" onClick={() => navigate("connectors")} type="button">
-              Browse all connectors <ChevronRight size={17} />
+              Browse all profiles <ChevronRight aria-hidden="true" size={17} />
             </button>
           </div>
           <figure className="home-photo">
@@ -771,22 +771,23 @@ export default function HomePage() {
 
       {view === "connectors" && (
         <section className="content-view connectors-view" aria-labelledby="connectors-title">
-          <PageLead eyebrow="Local network" title="Connectors" />
-          <form className="directory-search" onSubmit={handleSearch}>
-            <Search size={19} />
-            <input
-              aria-label="Search connectors"
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Housing, schools, business..."
-              type="search"
-              value={query}
-            />
+          <PageLead id="connectors-title" title="Find local help" />
+          <form aria-label="Search profiles" className="directory-search" onSubmit={handleSearch}>
+            <label className="directory-query">
+              <span>Search by name or topic</span>
+              <input
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Name or type of help"
+                type="search"
+                value={query}
+              />
+            </label>
             <select
-              aria-label="Profile type"
+              aria-label="Filter by profile type"
               onChange={(event) => setTypeFilter(event.target.value as "All" | ConnectorType)}
               value={typeFilter}
             >
-              <option>All</option>
+              <option value="All">All profiles</option>
               <option>Person</option>
               <option>Vendor</option>
               <option>Organization</option>
@@ -828,7 +829,7 @@ export default function HomePage() {
 
       {view === "favorites" && (
         <section className="content-view" aria-labelledby="favorites-title">
-          <PageLead eyebrow="Your shortlist" title="Favorites" />
+          <PageLead id="favorites-title" title="Favorites" />
           {favoriteConnectors.length ? (
             <ConnectorGrid connectors={favoriteConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} openProfile={openConnectorProfile} />
           ) : (
@@ -844,7 +845,7 @@ export default function HomePage() {
 
       {view === "notifications" && (
         <section className="content-view notifications-view" aria-labelledby="notifications-title">
-          <PageLead eyebrow="Your account" title="Notifications" />
+          <PageLead id="notifications-title" title="Notifications" />
           <div className="notification-toolbar">
             <span>{unreadNotifications ? `${unreadNotifications} unread` : "All caught up"}</span>
             {unreadNotifications > 0 && (
@@ -875,7 +876,7 @@ export default function HomePage() {
 
       {view === "friends" && (
         <section className="content-view friends-view" aria-labelledby="friends-title">
-          <PageLead eyebrow="Trusted connections" title="Your network" />
+          <PageLead id="friends-title" title="Your network" />
           <div className="friends-layout">
             <section className="recommendations" aria-label="Connections and recommendations">
               <div className="friend-view-tabs" role="tablist" aria-label="Network views">
@@ -967,7 +968,7 @@ export default function HomePage() {
 
       {view === "forum" && (
         <section className="content-view forum-view" aria-labelledby="forum-title">
-          <PageLead eyebrow="Neighbor to neighbor" title="Ask & Answer" />
+          <PageLead id="forum-title" title="Ask & Answer" />
           <div className="forum-layout">
             <nav className="topic-nav" aria-label="Forum topics">
               {["All", "Housing", "Schools", "Business", "Moving", "City Services"].map((topic) => (
@@ -1390,19 +1391,10 @@ function NavIcon({ view }: { view: View }) {
   return <Bell {...props} />;
 }
 
-function PageLead({ eyebrow, title }: { eyebrow: string; title: string }) {
-  const pageIndex: Record<string, string> = {
-    Connectors: "01",
-    Favorites: "02",
-    "Your network": "03",
-    "Ask & Answer": "04",
-    Notifications: "05",
-  };
-
+function PageLead({ id, title }: { id: string; title: string }) {
   return (
     <header className="page-lead">
-      <div className="page-lead-meta"><span aria-hidden="true" className="page-index">{pageIndex[title] ?? "DC"}</span><span className="eyebrow">{eyebrow}</span></div>
-      <h1>{title}</h1>
+      <h1 id={id}>{title}</h1>
     </header>
   );
 }
