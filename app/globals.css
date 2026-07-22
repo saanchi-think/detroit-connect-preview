@@ -299,6 +299,36 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .friend-add { align-items: center; background: transparent; border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; color: white; cursor: pointer; display: flex; font-size: 11px; font-weight: 750; gap: 7px; justify-content: center; margin-top: 18px; min-height: 42px; width: 100%; }
 .network-empty { align-items: center; border: 1px dashed #cfc8bc; color: var(--muted); display: flex; font-size: 12px; justify-content: center; min-height: 180px; padding: 24px; text-align: center; }
 
+.connector-profile-view { max-width: 1180px; }
+.profile-back { align-items: center; background: transparent; border: 0; color: var(--muted); cursor: pointer; display: flex; font-size: 12px; font-weight: 800; gap: 7px; margin: 8px 0 20px; padding: 0; }
+.profile-back:hover { color: var(--gold); }
+.public-profile-hero { align-items: center; border-bottom: 1px solid var(--line); display: grid; gap: 28px; grid-template-columns: 124px minmax(0, 1fr) 310px; padding: 22px 0 42px; }
+.public-profile-avatar { align-items: center; border-radius: 50%; color: white; display: flex; font-family: Georgia, serif; font-size: 34px; font-weight: 700; height: 118px; justify-content: center; width: 118px; }
+.profile-trust { align-items: center; color: #775014; display: flex; font-size: 10px; font-weight: 900; gap: 6px; text-transform: uppercase; }
+.public-profile-identity h1 { font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; font-size: clamp(48px, 6vw, 76px); letter-spacing: 0; line-height: 0.95; margin: 14px 0 12px; text-transform: uppercase; }
+.public-profile-identity > p { color: #4f5862; font-family: Georgia, serif; font-size: 18px; margin: 0 0 15px; }
+.profile-meta { display: flex; flex-wrap: wrap; gap: 16px; }.profile-meta span { align-items: center; color: var(--navy); display: flex; font-size: 11px; font-weight: 800; gap: 6px; }
+.public-profile-actions { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.public-profile-actions button { align-items: center; background: transparent; border: 1px solid #cbc4b8; border-radius: 6px; color: var(--navy); cursor: pointer; display: flex; font-size: 11px; font-weight: 850; gap: 7px; justify-content: center; min-height: 42px; padding: 0 10px; }
+.public-profile-actions button:hover, .public-profile-actions button.active { background: #eee9f5; border-color: var(--purple); color: var(--purple); }
+.public-profile-actions .profile-contact { background: var(--navy); border-color: var(--navy); color: white; grid-column: 1 / -1; min-height: 48px; }.public-profile-actions .profile-contact:hover { background: var(--purple); color: white; }
+.public-profile-actions button:last-child { grid-column: 1 / -1; }
+.public-profile-layout { align-items: start; display: grid; gap: 64px; grid-template-columns: minmax(0, 1fr) 320px; padding-top: 36px; }
+.public-profile-main { min-width: 0; }
+.profile-section { border-bottom: 1px solid var(--line); display: grid; gap: 22px; grid-template-columns: 38px minmax(0, 1fr); padding: 10px 0 38px; }.profile-section + .profile-section { padding-top: 34px; }
+.profile-section-index { color: var(--gold); font-family: ui-monospace, monospace; font-size: 10px; font-weight: 850; padding-top: 8px; }
+.profile-section h2 { font-family: Georgia, serif; font-size: 27px; font-weight: 600; margin: 0 0 20px; }
+.profile-topic-list { display: flex; flex-wrap: wrap; gap: 9px; }.profile-topic-list span { background: var(--gold-light); border: 1px solid #d9bd5b; border-radius: 5px; color: #3e3416; font-size: 11px; font-weight: 850; padding: 9px 12px; }
+.profile-about { color: #424b54; font-family: Georgia, serif; font-size: 19px; line-height: 1.7; margin: 0; max-width: 720px; }
+.profile-recommendations { display: grid; gap: 0; }
+.profile-recommendations blockquote { border-top: 1px solid var(--line); margin: 0; padding: 22px 0; }.profile-recommendations blockquote:last-child { padding-bottom: 0; }
+.profile-recommendations blockquote > p { color: #333b44; font-family: Georgia, serif; font-size: 17px; line-height: 1.6; margin: 0 0 17px; }
+.profile-recommendations footer { align-items: center; display: flex; gap: 10px; }.profile-recommendations footer > span { align-items: center; background: var(--purple); border-radius: 50%; color: white; display: flex; font-size: 9px; font-weight: 900; height: 34px; justify-content: center; width: 34px; }.profile-recommendations footer div { display: flex; flex-direction: column; }.profile-recommendations footer strong { font-size: 11px; }.profile-recommendations footer small { color: var(--muted); font-size: 9px; margin-top: 3px; }
+.profile-muted { color: var(--muted); font-size: 13px; }
+.profile-facts { background: var(--navy); border-radius: 8px; color: white; padding: 24px; position: sticky; top: 112px; }
+.profile-fact { align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.14); display: grid; gap: 11px; grid-template-columns: 20px 1fr; padding: 17px 0; }.profile-fact:first-child { padding-top: 0; }.profile-fact svg { color: var(--gold-light); margin-top: 2px; }.profile-fact div { display: flex; flex-direction: column; }.profile-fact span, .profile-affiliations > span { color: rgba(255,255,255,0.6); font-size: 9px; font-weight: 850; margin-bottom: 6px; text-transform: uppercase; }.profile-fact strong { font-size: 12px; line-height: 1.45; }.profile-fact small { color: rgba(255,255,255,0.58); font-size: 9px; margin-top: 5px; }
+.profile-affiliations { display: flex; flex-direction: column; gap: 7px; padding-top: 18px; }.profile-affiliations strong { font-size: 11px; line-height: 1.4; }
+
 .forum-layout { align-items: start; display: grid; gap: 28px; grid-template-columns: 190px minmax(0, 760px); }
 .topic-nav { display: flex; flex-direction: column; position: sticky; top: 110px; }
 .topic-nav button { background: transparent; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 12px; font-weight: 700; padding: 14px 8px; text-align: left; }
@@ -474,6 +504,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .home-photo { bottom: 96px; height: 37%; left: 24px; right: 24px; top: auto; transform: none; width: auto; }
   .home-index { display: none; }
   .content-view { padding: 105px 16px 92px; }
+  .public-profile-hero { align-items: start; grid-template-columns: 100px 1fr; }.public-profile-avatar { height: 94px; width: 94px; }.public-profile-actions { grid-column: 1 / -1; width: 100%; }
+  .public-profile-layout { gap: 28px; grid-template-columns: 1fr; }.profile-facts { position: static; }
   .friends-layout { grid-template-columns: 1fr; }.friends-panel { position: static; }
   .forum-layout { grid-template-columns: 1fr; }.topic-nav { flex-direction: row; overflow-x: auto; position: static; }.topic-nav button { border-bottom: 1px solid var(--line); flex: 0 0 auto; }.topic-nav button.active { border-left: 0; border-bottom: 3px solid var(--gold); padding-left: 8px; }
   .view-explore { height: auto; overflow: visible; }
@@ -498,6 +530,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .connector-grid, .friends-layout .connector-grid { grid-template-columns: 1fr; }.connector-card { min-height: 330px; }
   .friend-view-tabs { overflow-x: auto; }.friend-view-tabs button { flex: 0 0 auto; }
   .connector-actions { grid-template-columns: 1fr; }.view-profile { justify-content: space-between; min-height: 34px; }
+  .public-profile-hero { grid-template-columns: 1fr; }.public-profile-avatar { height: 84px; width: 84px; }.public-profile-identity h1 { font-size: 48px; }.public-profile-actions { grid-template-columns: 1fr 1fr; }.public-profile-actions button:last-child { grid-column: 1 / -1; }
+  .public-profile-layout { padding-top: 24px; }.profile-section { gap: 8px; grid-template-columns: 28px minmax(0, 1fr); }.profile-section h2 { font-size: 23px; }.profile-about { font-size: 16px; }.profile-recommendations blockquote > p { font-size: 15px; }
   .post-composer > div:last-child { align-items: stretch; flex-direction: column; }.topic-select { margin: 0; width: 100%; }.select-control { flex: 1; min-width: 0; width: auto; }
   .share-panel { grid-template-columns: 1fr 1fr; }.share-panel input { grid-column: 1 / -1; }
   .explore-copy-panel { padding-inline: 16px; }.explore-map-search { margin-right: 56px; }

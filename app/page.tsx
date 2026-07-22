@@ -3,27 +3,31 @@
 /* eslint-disable @next/next/no-img-element -- vinext serves these bundled preview assets directly. */
 
 import {
+  ArrowLeft,
   Bookmark,
   Building2,
   Check,
   ChevronDown,
   ChevronRight,
   CircleUserRound,
+  Clock3,
   Heart,
+  Languages,
   MapPin,
   MessageCircle,
   Plus,
   Search,
   Share2,
+  ShieldCheck,
   Sparkles,
   Star,
   Store,
   Users,
 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ExploreMap } from "./explore-map";
 
-type View = "home" | "connectors" | "forum" | "explore" | "friends" | "favorites" | "profile";
+type View = "home" | "connectors" | "connector-profile" | "forum" | "explore" | "friends" | "favorites" | "profile";
 type ConnectorType = "Person" | "Vendor" | "Organization";
 type AvatarKey = "tire" | "boat" | "car" | "pizza";
 
@@ -40,6 +44,23 @@ type Connector = {
   friendRecommendations?: string[];
   experience?: string;
   workedWithNote?: string;
+};
+
+type ConnectorDetail = {
+  about: string;
+  neighborhoodExpertise: string[];
+  organization: string;
+  yearsConnected: string;
+  languages: string[];
+  availability: string[];
+  response: string;
+  affiliations: string[];
+  recommendations: Array<{
+    friend: string;
+    initials: string;
+    meta: string;
+    quote: string;
+  }>;
 };
 
 type ForumPost = {
@@ -274,6 +295,83 @@ const friends = [
   { initials: "JS", name: "Jordan Smith", area: "Corktown" },
 ];
 
+const connectorDetails: Record<string, ConnectorDetail> = {
+  maria: {
+    about: "I help Detroit residents and newcomers make confident decisions about housing, schools, and neighborhood life. My work connects people with practical resources and trusted local organizations.",
+    neighborhoodExpertise: ["Southwest Detroit", "Corktown", "Midtown"],
+    organization: "Southwest Detroit Community Network",
+    yearsConnected: "12+ years",
+    languages: ["English", "Spanish"],
+    availability: ["Messages", "Coffee chats", "Mentoring"],
+    response: "Usually responds within one day",
+    affiliations: ["Detroit Housing Coalition", "Neighborhood Leadership Council"],
+    recommendations: [
+      {
+        friend: "Priya Lawson",
+        initials: "PL",
+        meta: "Your friend · Midtown",
+        quote: "Maria helped me compare rental options without making the process feel overwhelming. Her neighborhood advice was thoughtful and specific.",
+      },
+      {
+        friend: "Jordan Smith",
+        initials: "JS",
+        meta: "Your friend · Corktown",
+        quote: "I recommend Maria whenever someone needs a trustworthy first call for housing or school questions.",
+      },
+    ],
+  },
+  darnell: {
+    about: "I help Detroit entrepreneurs understand permits, taxes, and the local resources available to small businesses.",
+    neighborhoodExpertise: ["Corktown", "Downtown", "New Center"],
+    organization: "Detroit Small Business Collaborative",
+    yearsConnected: "10+ years",
+    languages: ["English"],
+    availability: ["Messages", "Calls", "Mentoring"],
+    response: "Usually responds within two days",
+    affiliations: ["Corktown Business Association"],
+    recommendations: [
+      {
+        friend: "Marcus Lee",
+        initials: "ML",
+        meta: "Your friend · East Village",
+        quote: "Darnell gave me a clear path through permits and tax setup when I was starting my business.",
+      },
+    ],
+  },
+  aisha: {
+    about: "I connect families with healthcare, childcare, and city services, with a focus on making unfamiliar systems easier to navigate.",
+    neighborhoodExpertise: ["Warrendale", "West Side", "Midtown"],
+    organization: "Detroit Family Resource Collaborative",
+    yearsConnected: "8 years",
+    languages: ["English", "Arabic"],
+    availability: ["Messages", "Calls"],
+    response: "Usually responds within one day",
+    affiliations: ["Family Services Network"],
+    recommendations: [
+      {
+        friend: "Jordan Smith",
+        initials: "JS",
+        meta: "Your friend · Corktown",
+        quote: "Aisha knows where to begin and explains every next step with patience.",
+      },
+    ],
+  },
+};
+
+function getConnectorDetail(connector: Connector): ConnectorDetail {
+  return connectorDetails[connector.id] ?? {
+    about: `${connector.name} helps Detroit residents with ${connector.topics.join(", ").toLowerCase()}.`,
+    neighborhoodExpertise: [connector.neighborhood],
+    organization: connector.name,
+    yearsConnected: "Connected to Detroit",
+    languages: ["English"],
+    availability: ["Messages"],
+    response: "Response time varies",
+    affiliations: [],
+    recommendations: connector.experience ? [{ friend: connector.friendRecommendations?.[0] ?? "Community member", initials: "DC", meta: "Detroit Connect", quote: connector.experience }] : [],
+  };
+}
+
 function TypeIcon({ type }: { type: ConnectorType }) {
   if (type === "Vendor") return <Store size={15} />;
   if (type === "Organization") return <Building2 size={15} />;
@@ -283,6 +381,8 @@ function TypeIcon({ type }: { type: ConnectorType }) {
 export default function HomePage() {
   const [view, setView] = useState<View>("home");
   const [directoryConnectors, setDirectoryConnectors] = useState(connectors);
+  const [selectedConnectorId, setSelectedConnectorId] = useState("maria");
+  const [profileReturnView, setProfileReturnView] = useState<View>("connectors");
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"All" | ConnectorType>("All");
   const [saved, setSaved] = useState(() => new Set(["maria"]));
@@ -314,7 +414,18 @@ export default function HomePage() {
     return selectedFriend === "All friends" || connector.friendRecommendations.includes(selectedFriend);
   });
   const workedWithConnectors = directoryConnectors.filter((connector) => workedWith.has(connector.id));
+  const selectedConnector = directoryConnectors.find((connector) => connector.id === selectedConnectorId) ?? directoryConnectors[0];
   const visiblePosts = forumTopic === "All" ? posts : posts.filter((post) => post.topic === forumTopic);
+
+  useEffect(() => {
+    const profileId = new URLSearchParams(window.location.search).get("profile");
+    if (!profileId || !connectors.some((connector) => connector.id === profileId)) return;
+    const openSharedProfile = window.setTimeout(() => {
+      setSelectedConnectorId(profileId);
+      setView("connector-profile");
+    }, 0);
+    return () => window.clearTimeout(openSharedProfile);
+  }, []);
 
   function announce(message: string) {
     setToast(message);
@@ -322,8 +433,46 @@ export default function HomePage() {
   }
 
   function navigate(next: View) {
+    if (next !== "connector-profile") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("profile");
+      window.history.replaceState({}, "", url);
+    }
     setView(next);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openConnectorProfile(id: string) {
+    setProfileReturnView(view === "connector-profile" ? "connectors" : view);
+    setSelectedConnectorId(id);
+    setView("connector-profile");
+    const url = new URL(window.location.href);
+    url.searchParams.set("profile", id);
+    window.history.replaceState({}, "", url);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function shareConnector(connector: Connector) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("profile", connector.id);
+    const shareData = {
+      title: `${connector.name} on Detroit Connect`,
+      text: `Take a look at ${connector.name}'s Detroit Connect profile.`,
+      url: url.toString(),
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        announce("Profile shared");
+      } else {
+        await navigator.clipboard.writeText(shareData.url);
+        announce("Profile link copied");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      announce("Unable to share this profile");
+    }
   }
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
@@ -530,8 +679,22 @@ export default function HomePage() {
             <span>{filteredConnectors.length} trusted profiles</span>
             {query && <button onClick={() => setQuery("")} type="button">Clear search</button>}
           </div>
-          <ConnectorGrid connectors={filteredConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} announce={announce} />
+          <ConnectorGrid connectors={filteredConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} openProfile={openConnectorProfile} />
         </section>
+      )}
+
+      {view === "connector-profile" && selectedConnector && (
+        <ConnectorProfileView
+          connector={selectedConnector}
+          detail={getConnectorDetail(selectedConnector)}
+          isSaved={saved.has(selectedConnector.id)}
+          hasWorkedWith={workedWith.has(selectedConnector.id)}
+          onBack={() => navigate(profileReturnView)}
+          onContact={() => announce(`Contact request sent to ${selectedConnector.name}`)}
+          onSave={() => toggleFavorite(selectedConnector.id)}
+          onShare={() => void shareConnector(selectedConnector)}
+          onWorkedWith={() => toggleWorkedWith(selectedConnector.id)}
+        />
       )}
 
       {view === "profile" && (
@@ -546,7 +709,7 @@ export default function HomePage() {
         <section className="content-view" aria-labelledby="favorites-title">
           <PageLead eyebrow="Your shortlist" title="Favorites" />
           {favoriteConnectors.length ? (
-            <ConnectorGrid connectors={favoriteConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} announce={announce} />
+            <ConnectorGrid connectors={favoriteConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} openProfile={openConnectorProfile} />
           ) : (
             <EmptyState
               icon={<Bookmark size={24} />}
@@ -588,7 +751,7 @@ export default function HomePage() {
                 <>
                   <div className="section-label"><Star size={17} /> {selectedFriend === "All friends" ? "Recommended by people you know" : `Recommended by ${selectedFriend}`}</div>
                   {recommendedConnectors.length ? (
-                    <ConnectorGrid connectors={recommendedConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} announce={announce} contextMode="recommendation" />
+                    <ConnectorGrid connectors={recommendedConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} openProfile={openConnectorProfile} contextMode="recommendation" />
                   ) : (
                     <div className="network-empty">No recommendations from this friend yet.</div>
                   )}
@@ -597,7 +760,7 @@ export default function HomePage() {
                 <>
                   <div className="section-label"><Check size={17} /> People and services you have worked with</div>
                   {workedWithConnectors.length ? (
-                    <ConnectorGrid connectors={workedWithConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} announce={announce} contextMode="history" />
+                    <ConnectorGrid connectors={workedWithConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} openProfile={openConnectorProfile} contextMode="history" />
                   ) : (
                     <div className="network-empty">Your worked-with history is empty.</div>
                   )}
@@ -1038,7 +1201,7 @@ function PageLead({ eyebrow, title }: { eyebrow: string; title: string }) {
   return <header className="page-lead"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1></header>;
 }
 
-function ConnectorGrid({ connectors: items, saved, workedWith, toggleFavorite, toggleWorkedWith, announce, contextMode }: { connectors: Connector[]; saved: Set<string>; workedWith: Set<string>; toggleFavorite: (id: string) => void; toggleWorkedWith: (id: string) => void; announce: (message: string) => void; contextMode?: "recommendation" | "history" }) {
+function ConnectorGrid({ connectors: items, saved, workedWith, toggleFavorite, toggleWorkedWith, openProfile, contextMode }: { connectors: Connector[]; saved: Set<string>; workedWith: Set<string>; toggleFavorite: (id: string) => void; toggleWorkedWith: (id: string) => void; openProfile: (id: string) => void; contextMode?: "recommendation" | "history" }) {
   return (
     <div className="connector-grid">
       {items.map((connector) => (
@@ -1070,11 +1233,109 @@ function ConnectorGrid({ connectors: items, saved, workedWith, toggleFavorite, t
             >
               <Check size={15} /> {workedWith.has(connector.id) ? "Worked with" : "Add to history"}
             </button>
-            <button className="view-profile" onClick={() => announce(`${connector.name}'s profile opened`)} type="button">View profile <ChevronRight size={16} /></button>
+            <button className="view-profile" onClick={() => openProfile(connector.id)} type="button">View profile <ChevronRight size={16} /></button>
           </div>
         </article>
       ))}
     </div>
+  );
+}
+
+function ConnectorProfileView({ connector, detail, isSaved, hasWorkedWith, onBack, onContact, onSave, onShare, onWorkedWith }: { connector: Connector; detail: ConnectorDetail; isSaved: boolean; hasWorkedWith: boolean; onBack: () => void; onContact: () => void; onSave: () => void; onShare: () => void; onWorkedWith: () => void }) {
+  return (
+    <section className="connector-profile-view content-view" aria-labelledby="public-profile-title">
+      <button className="profile-back" onClick={onBack} type="button"><ArrowLeft size={17} /> Back</button>
+
+      <header className="public-profile-hero">
+        <span className={`public-profile-avatar avatar-${connector.color}`}>{connector.initials}</span>
+        <div className="public-profile-identity">
+          <span className="profile-trust"><ShieldCheck size={15} /> Verified community connector</span>
+          <h1 id="public-profile-title">{connector.name}</h1>
+          <p>{connector.role}</p>
+          <div className="profile-meta">
+            <span><MapPin size={16} /> {connector.neighborhood}</span>
+            <span><TypeIcon type={connector.type} /> {connector.type}</span>
+          </div>
+        </div>
+        <div className="public-profile-actions" aria-label="Profile actions">
+          <button className="profile-contact" onClick={onContact} type="button"><MessageCircle size={17} /> Contact {connector.name.split(" ")[0]}</button>
+          <button className={isSaved ? "active" : ""} onClick={onSave} type="button"><Heart fill={isSaved ? "currentColor" : "none"} size={16} /> {isSaved ? "Saved" : "Save"}</button>
+          <button onClick={onShare} type="button"><Share2 size={16} /> Share</button>
+          <button className={hasWorkedWith ? "active" : ""} onClick={onWorkedWith} type="button"><Check size={16} /> {hasWorkedWith ? "Worked with" : "Add to history"}</button>
+        </div>
+      </header>
+
+      <div className="public-profile-layout">
+        <div className="public-profile-main">
+          <section className="profile-section" aria-labelledby="help-topics-title">
+            <span className="profile-section-index">01</span>
+            <div>
+              <h2 id="help-topics-title">Can help with</h2>
+              <div className="profile-topic-list">{connector.topics.map((topic) => <span key={topic}>{topic}</span>)}</div>
+            </div>
+          </section>
+
+          <section className="profile-section" aria-labelledby="about-profile-title">
+            <span className="profile-section-index">02</span>
+            <div>
+              <h2 id="about-profile-title">About</h2>
+              <p className="profile-about">{detail.about}</p>
+            </div>
+          </section>
+
+          <section className="profile-section" aria-labelledby="friend-experiences-title">
+            <span className="profile-section-index">03</span>
+            <div>
+              <h2 id="friend-experiences-title">Friends&apos; experiences</h2>
+              {detail.recommendations.length ? (
+                <div className="profile-recommendations">
+                  {detail.recommendations.map((recommendation) => (
+                    <blockquote key={`${recommendation.friend}-${recommendation.quote}`}>
+                      <p>“{recommendation.quote}”</p>
+                      <footer>
+                        <span>{recommendation.initials}</span>
+                        <div><strong>{recommendation.friend}</strong><small>{recommendation.meta}</small></div>
+                      </footer>
+                    </blockquote>
+                  ))}
+                </div>
+              ) : (
+                <p className="profile-muted">No friend experiences shared yet.</p>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <aside className="profile-facts" aria-label="Profile details">
+          <div className="profile-fact">
+            <MapPin size={17} />
+            <div><span>Neighborhood expertise</span><strong>{detail.neighborhoodExpertise.join(", ")}</strong></div>
+          </div>
+          <div className="profile-fact">
+            <Building2 size={17} />
+            <div><span>Organization</span><strong>{detail.organization}</strong></div>
+          </div>
+          <div className="profile-fact">
+            <Clock3 size={17} />
+            <div><span>Detroit connection</span><strong>{detail.yearsConnected}</strong></div>
+          </div>
+          <div className="profile-fact">
+            <Languages size={17} />
+            <div><span>Languages</span><strong>{detail.languages.join(", ")}</strong></div>
+          </div>
+          <div className="profile-fact">
+            <MessageCircle size={17} />
+            <div><span>Available for</span><strong>{detail.availability.join(", ")}</strong><small>{detail.response}</small></div>
+          </div>
+          {detail.affiliations.length > 0 && (
+            <div className="profile-affiliations">
+              <span>Affiliations</span>
+              {detail.affiliations.map((affiliation) => <strong key={affiliation}>{affiliation}</strong>)}
+            </div>
+          )}
+        </aside>
+      </div>
+    </section>
   );
 }
 
