@@ -3,7 +3,6 @@
 /* eslint-disable @next/next/no-img-element -- vinext serves these bundled preview assets directly. */
 
 import {
-  ArrowLeft,
   Bookmark,
   Building2,
   Check,
@@ -11,7 +10,6 @@ import {
   ChevronRight,
   CircleUserRound,
   Heart,
-  Landmark,
   MapPin,
   MessageCircle,
   Plus,
@@ -23,6 +21,7 @@ import {
   Users,
 } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
+import { ExploreMap } from "./explore-map";
 
 type View = "home" | "connectors" | "forum" | "explore" | "friends" | "favorites" | "profile";
 type ConnectorType = "Person" | "Vendor" | "Organization";
@@ -247,15 +246,6 @@ const profileAvatarOptions: Array<{ id: AvatarKey; label: string }> = [
   { id: "pizza", label: "Deep dish pizza avatar" },
 ];
 
-const places = [
-  { name: "Michigan Central", category: "Landmarks", image: "images/places/michigan-central.jpg", x: 36, y: 61 },
-  { name: "Detroit Institute of Arts", category: "Arts", image: "images/places/dia.jpg", x: 55, y: 31 },
-  { name: "Motown Museum", category: "Arts", image: "images/places/motown.jpg", x: 43, y: 24 },
-  { name: "Campus Martius", category: "Things to do", image: "images/places/campus.jpg", x: 68, y: 61 },
-  { name: "Corktown", category: "Neighborhoods", image: "images/places/corktown.jpg", x: 45, y: 69 },
-  { name: "Southwest Detroit", category: "Neighborhoods", image: "images/places/southwest.jpg", x: 27, y: 76 },
-];
-
 const navItems: Array<{ id: View; label: string }> = [
   { id: "home", label: "Home" },
   { id: "forum", label: "Community Forum" },
@@ -281,8 +271,6 @@ export default function HomePage() {
   const [openSharePost, setOpenSharePost] = useState<number | null>(null);
   const [postComments, setPostComments] = useState<Record<number, ForumComment[]>>(initialPostComments);
   const [forumTopic, setForumTopic] = useState("All");
-  const [exploreFilter, setExploreFilter] = useState("All");
-  const [selectedPlace, setSelectedPlace] = useState(places[0]);
   const [selectedAvatar, setSelectedAvatar] = useState<AvatarKey>("tire");
   const [toast, setToast] = useState("");
 
@@ -299,7 +287,6 @@ export default function HomePage() {
 
   const favoriteConnectors = directoryConnectors.filter((connector) => saved.has(connector.id));
   const visiblePosts = forumTopic === "All" ? posts : posts.filter((post) => post.topic === forumTopic);
-  const visiblePlaces = exploreFilter === "All" ? places : places.filter((place) => place.category === exploreFilter);
 
   function announce(message: string) {
     setToast(message);
@@ -660,51 +647,7 @@ export default function HomePage() {
       )}
 
       {view === "explore" && (
-        <section className="explore-view" aria-labelledby="explore-title">
-          <aside className="places-panel">
-            <button className="back-link" onClick={() => navigate("home")} type="button"><ArrowLeft size={17} /> Home</button>
-            <span className="eyebrow">Explore the city</span>
-            <h1 id="explore-title">Detroit, up close.</h1>
-            <div className="explore-filters">
-              {["All", "Landmarks", "Arts", "Things to do", "Neighborhoods"].map((filter) => (
-                <button className={exploreFilter === filter ? "active" : ""} key={filter} onClick={() => setExploreFilter(filter)} type="button">{filter}</button>
-              ))}
-            </div>
-            <div className="place-list">
-              {visiblePlaces.map((place) => (
-                <button className={selectedPlace.name === place.name ? "active" : ""} key={place.name} onClick={() => setSelectedPlace(place)} type="button">
-                  <img alt="" src={place.image} />
-                  <span><small>{place.category}</small><strong>{place.name}</strong></span>
-                  <ChevronRight size={17} />
-                </button>
-              ))}
-            </div>
-          </aside>
-          <div className="city-map" aria-label="Interactive map of Detroit places">
-            <div className="river">Detroit River</div>
-            <div className="map-label label-downtown">Downtown</div>
-            <div className="map-label label-midtown">Midtown</div>
-            <div className="map-label label-corktown">Corktown</div>
-            {visiblePlaces.map((place) => (
-              <button
-                aria-label={place.name}
-                className={`map-marker ${selectedPlace.name === place.name ? "active" : ""}`}
-                key={place.name}
-                onClick={() => setSelectedPlace(place)}
-                style={{ left: `${place.x}%`, top: `${place.y}%` }}
-                title={place.name}
-                type="button"
-              >
-                {place.category === "Neighborhoods" ? <MapPin size={19} /> : <Landmark size={17} />}
-              </button>
-            ))}
-            <article className="map-preview">
-              <img alt={selectedPlace.name} src={selectedPlace.image} />
-              <div><small>{selectedPlace.category}</small><strong>{selectedPlace.name}</strong></div>
-            </article>
-            <div className="map-key"><span><i className="landmark-dot" /> Landmark</span><span><i className="neighborhood-dot" /> Neighborhood</span></div>
-          </div>
-        </section>
+        <ExploreMap onClose={() => navigate("home")} />
       )}
 
       {toast && <div aria-live="polite" className="toast"><Check size={17} /> {toast}</div>}
