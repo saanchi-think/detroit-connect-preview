@@ -7,6 +7,7 @@ import {
   Bookmark,
   Building2,
   Check,
+  ChevronDown,
   ChevronRight,
   CircleUserRound,
   Heart,
@@ -424,9 +425,16 @@ export default function HomePage() {
                 <input aria-label="Post title" name="title" placeholder="What would you like help with?" required />
                 <textarea aria-label="Post details" name="body" placeholder="Add the details neighbors need to answer." required />
                 <div>
-                  <select aria-label="Post topic" defaultValue="Housing" name="topic">
-                    <option>Housing</option><option>Schools</option><option>Business</option><option>Moving</option><option>City Services</option>
-                  </select>
+                  <label className="topic-select">
+                    <span>Select relevant tag</span>
+                    <span className="select-control">
+                      <select aria-label="Select relevant tag" defaultValue="" name="topic" required>
+                        <option disabled value="">Choose a tag</option>
+                        <option>Housing</option><option>Schools</option><option>Business</option><option>Moving</option><option>City Services</option>
+                      </select>
+                      <ChevronDown aria-hidden="true" size={16} />
+                    </span>
+                  </label>
                   <button type="submit">Post request</button>
                 </div>
               </form>

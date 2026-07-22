@@ -290,7 +290,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .post-composer input, .post-composer textarea, .post-composer select { background: rgba(255,255,255,0.88); border: 1px solid rgba(66,52,13,0.22); border-radius: 5px; outline: 0; padding: 12px; }
 .post-composer textarea { min-height: 86px; resize: vertical; }
 .post-composer > div:last-child { display: flex; gap: 10px; justify-content: flex-end; }
-.post-composer select { margin-right: auto; }
+.topic-select { display: grid; gap: 5px; margin-right: auto; }
+.topic-select > span:first-child { color: #4f431d; font-size: 9px; font-weight: 850; text-transform: uppercase; }
+.select-control { display: block; min-width: 170px; position: relative; }
+.select-control select { appearance: none; cursor: pointer; min-height: 42px; padding: 0 34px 0 12px; width: 100%; }
+.select-control svg { color: var(--navy); pointer-events: none; position: absolute; right: 11px; top: 50%; transform: translateY(-50%); }
 .forum-post { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 20px; }
 .forum-post header { align-items: center; display: grid; gap: 10px; grid-template-columns: 40px 1fr auto; }
 .post-avatar { align-items: center; background: var(--navy); border-radius: 50%; color: white; display: flex; font-size: 10px; font-weight: 800; height: 40px; justify-content: center; }
@@ -385,7 +389,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .home-view { min-height: 940px; }.home-copy h1 { font-size: 64px; }.home-copy h1 span:last-child { margin-top: 16px; }.ai-search { grid-template-columns: 1fr 50px; min-height: 66px; }.ai-search input { font-size: 12px; }
   .directory-search { grid-template-columns: auto 1fr auto; }.directory-search select { border: 0; grid-column: 2; padding: 0; }.directory-search button { grid-column: 3; grid-row: 1 / span 2; }.directory-search > svg { grid-row: 1 / span 2; }
   .connector-grid, .friends-layout .connector-grid { grid-template-columns: 1fr; }.connector-card { min-height: 330px; }
-  .post-composer > div:last-child { align-items: stretch; flex-direction: column; }.post-composer select { margin: 0; }
+  .post-composer > div:last-child { align-items: stretch; flex-direction: column; }.topic-select { margin: 0; }.select-control { width: 100%; }
   .share-panel { grid-template-columns: 1fr 1fr; }.share-panel input { grid-column: 1 / -1; }
   .place-list { grid-template-columns: 1fr; }.map-preview { bottom: 22px; left: 16px; width: calc(100% - 32px); }.map-key { right: 12px; top: 12px; }
   .profile-modal { padding: 28px 20px; }
