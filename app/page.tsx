@@ -21,12 +21,12 @@ import {
   Star,
   Store,
   Users,
-  X,
 } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 
-type View = "home" | "connectors" | "forum" | "explore" | "friends" | "favorites";
+type View = "home" | "connectors" | "forum" | "explore" | "friends" | "favorites" | "profile";
 type ConnectorType = "Person" | "Vendor" | "Organization";
+type AvatarKey = "tire" | "boat" | "car" | "pizza";
 
 type Connector = {
   id: string;
@@ -223,6 +223,30 @@ const initialPostComments: Record<number, ForumComment[]> = {
   ],
 };
 
+const helperTopics = {
+  living: ["Housing", "Renting", "Buying a home", "Utilities", "Neighborhood recommendations"],
+  family: ["Schools", "Childcare", "Youth programs", "College preparation"],
+  career: ["Job search", "Entrepreneurship", "Small business resources", "Networking", "Workforce development"],
+  community: ["Faith communities", "Arts & culture", "Recreation", "Volunteer opportunities", "Community organizations"],
+  navigation: ["Transportation", "City services", "Permits", "Taxes", "Public safety"],
+};
+
+const profileSkills = ["Marketing", "Construction", "Education", "Technology", "Real estate", "Finance", "Healthcare", "Legal"];
+const profileAvailability = ["Messages", "Calls", "Coffee chats", "Mentoring", "Not currently available"];
+const helperTopicGroups = [
+  { label: "Living in Detroit", topics: helperTopics.living },
+  { label: "Family & Education", topics: helperTopics.family },
+  { label: "Career & Business", topics: helperTopics.career },
+  { label: "Community Life", topics: helperTopics.community },
+  { label: "City Navigation", topics: helperTopics.navigation },
+];
+const profileAvatarOptions: Array<{ id: AvatarKey; label: string }> = [
+  { id: "tire", label: "Tire avatar" },
+  { id: "boat", label: "Lake boat avatar" },
+  { id: "car", label: "Racing car avatar" },
+  { id: "pizza", label: "Deep dish pizza avatar" },
+];
+
 const places = [
   { name: "Michigan Central", category: "Landmarks", image: "images/places/michigan-central.jpg", x: 36, y: 61 },
   { name: "Detroit Institute of Arts", category: "Arts", image: "images/places/dia.jpg", x: 55, y: 31 },
@@ -248,6 +272,7 @@ function TypeIcon({ type }: { type: ConnectorType }) {
 
 export default function HomePage() {
   const [view, setView] = useState<View>("home");
+  const [directoryConnectors, setDirectoryConnectors] = useState(connectors);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"All" | ConnectorType>("All");
   const [saved, setSaved] = useState(() => new Set(["maria"]));
@@ -258,21 +283,21 @@ export default function HomePage() {
   const [forumTopic, setForumTopic] = useState("All");
   const [exploreFilter, setExploreFilter] = useState("All");
   const [selectedPlace, setSelectedPlace] = useState(places[0]);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedAvatar, setSelectedAvatar] = useState<AvatarKey>("tire");
   const [toast, setToast] = useState("");
 
   const filteredConnectors = useMemo(() => {
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-    return connectors.filter((connector) => {
+    return directoryConnectors.filter((connector) => {
       const matchesType = typeFilter === "All" || connector.type === typeFilter;
       const haystack = [connector.name, connector.role, connector.neighborhood, connector.type, ...connector.topics]
         .join(" ")
         .toLowerCase();
       return matchesType && terms.every((term) => haystack.includes(term));
     });
-  }, [query, typeFilter]);
+  }, [directoryConnectors, query, typeFilter]);
 
-  const favoriteConnectors = connectors.filter((connector) => saved.has(connector.id));
+  const favoriteConnectors = directoryConnectors.filter((connector) => saved.has(connector.id));
   const visiblePosts = forumTopic === "All" ? posts : posts.filter((post) => post.topic === forumTopic);
   const visiblePlaces = exploreFilter === "All" ? places : places.filter((place) => place.category === exploreFilter);
 
@@ -347,6 +372,45 @@ export default function HomePage() {
     announce("Comment posted");
   }
 
+  function submitProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const firstName = String(form.get("firstName") || "").trim();
+    const lastName = String(form.get("lastName") || "").trim();
+    const neighborhood = String(form.get("neighborhood") || "Detroit").trim();
+    const profileType = String(form.get("profileType") || "Individual helper");
+    const topics = form.getAll("topics").map(String);
+    const otherTopic = String(form.get("otherTopic") || "").trim();
+    const jobTitle = String(form.get("jobTitle") || "").trim();
+
+    if (!firstName || !lastName || !neighborhood) return;
+
+    const type: ConnectorType = profileType.startsWith("Vendor")
+      ? "Vendor"
+      : profileType.startsWith("Community")
+        ? "Organization"
+        : "Person";
+    const profileTopics = [...topics, ...(otherTopic ? [otherTopic] : [])].slice(0, 3);
+    const name = `${firstName} ${lastName}`;
+    const newConnector: Connector = {
+      id: `profile-${Date.now()}`,
+      name,
+      role: jobTitle || (type === "Person" ? "Detroit community connector" : profileType),
+      neighborhood,
+      type,
+      topics: profileTopics.length ? profileTopics : ["Community support"],
+      initials: `${firstName[0]}${lastName[0]}`.toUpperCase(),
+      color: selectedAvatar === "car" ? "coral" : selectedAvatar === "pizza" ? "gold" : selectedAvatar === "boat" ? "blue" : "navy",
+    };
+
+    setDirectoryConnectors((current) => [newConnector, ...current]);
+    setQuery(name);
+    setTypeFilter("All");
+    event.currentTarget.reset();
+    navigate("connectors");
+    announce("Profile created");
+  }
+
   async function copyPostLink(post: ForumPost) {
     const url = `https://saanchi-think.github.io/detroit-connect-preview/#post-${post.id}`;
 
@@ -368,7 +432,7 @@ export default function HomePage() {
 
   return (
     <main className={`site-shell view-${view}`}>
-      <Header activeView={view} navigate={navigate} onCreateProfile={() => setProfileOpen(true)} />
+      <Header activeView={view} navigate={navigate} />
 
       {view === "home" && (
         <section className="home-view" aria-labelledby="home-title">
@@ -441,6 +505,14 @@ export default function HomePage() {
         </section>
       )}
 
+      {view === "profile" && (
+        <CreateProfileView
+          onSubmit={submitProfile}
+          selectedAvatar={selectedAvatar}
+          setSelectedAvatar={setSelectedAvatar}
+        />
+      )}
+
       {view === "favorites" && (
         <section className="content-view" aria-labelledby="favorites-title">
           <PageLead eyebrow="Your shortlist" title="Favorites" />
@@ -463,7 +535,7 @@ export default function HomePage() {
           <div className="friends-layout">
             <section className="recommendations" aria-label="Friend recommendations">
               <div className="section-label"><Star size={17} /> Recommended by people you know</div>
-              <ConnectorGrid connectors={connectors.filter((item) => item.recommendedBy)} saved={saved} toggleFavorite={toggleFavorite} announce={announce} />
+              <ConnectorGrid connectors={directoryConnectors.filter((item) => item.recommendedBy)} saved={saved} toggleFavorite={toggleFavorite} announce={announce} />
             </section>
             <aside className="friends-panel">
               <div className="aside-title">
@@ -635,27 +707,280 @@ export default function HomePage() {
         </section>
       )}
 
-      {profileOpen && (
-        <div className="modal-layer" role="presentation" onMouseDown={() => setProfileOpen(false)}>
-          <section aria-labelledby="profile-title" className="profile-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-            <button aria-label="Close" className="modal-close" onClick={() => setProfileOpen(false)} type="button"><X size={19} /></button>
-            <span className="eyebrow">Join the network</span>
-            <h2 id="profile-title">Create a connector profile</h2>
-            <div className="profile-preview-avatar">DC</div>
-            <label>Name<input placeholder="Your full name" /></label>
-            <label>Neighborhood<input placeholder="Neighborhood or ZIP code" /></label>
-            <label>How can you help?<input placeholder="Housing, schools, business..." /></label>
-            <button onClick={() => { setProfileOpen(false); announce("Profile preview saved"); }} type="button">Continue</button>
-          </section>
-        </div>
-      )}
-
       {toast && <div aria-live="polite" className="toast"><Check size={17} /> {toast}</div>}
     </main>
   );
 }
 
-function Header({ activeView, navigate, onCreateProfile }: { activeView: View; navigate: (view: View) => void; onCreateProfile: () => void }) {
+function CreateProfileView({
+  onSubmit,
+  selectedAvatar,
+  setSelectedAvatar,
+}: {
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  selectedAvatar: AvatarKey;
+  setSelectedAvatar: (avatar: AvatarKey) => void;
+}) {
+  return (
+    <section className="create-profile-view" aria-labelledby="create-profile-title">
+      <div className="profile-page-inner">
+        <header className="profile-hero">
+          <h1 id="create-profile-title">Create profile</h1>
+          <div className="profile-photo-orbit" aria-label="Profile picture preview">
+            <div className="profile-photo-circle">
+              <ProfileAvatar avatar={selectedAvatar} />
+            </div>
+            <div className="avatar-options" aria-label="Default profile picture options">
+              {profileAvatarOptions.map((avatar) => (
+                <button
+                  aria-label={avatar.label}
+                  aria-pressed={selectedAvatar === avatar.id}
+                  className={selectedAvatar === avatar.id ? "is-selected" : ""}
+                  key={avatar.id}
+                  onClick={() => setSelectedAvatar(avatar.id)}
+                  type="button"
+                >
+                  <ProfileAvatar avatar={avatar.id} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </header>
+
+        <form className="profile-form" aria-label="Create Detroit Connect profile" onSubmit={onSubmit}>
+          <section className="form-section">
+            <div className="section-intro">
+              <span className="step">01</span>
+              <h2>Match Basics</h2>
+            </div>
+            <div className="field-grid two">
+              <label>
+                <span>Profile type</span>
+                <select defaultValue="Individual helper" name="profileType">
+                  <option>Individual helper</option>
+                  <option>Vendor / service provider</option>
+                  <option>Community organization</option>
+                </select>
+              </label>
+              <label>
+                <span>Neighborhood</span>
+                <input name="neighborhood" placeholder="Southwest Detroit" required type="text" />
+              </label>
+              <label>
+                <span>ZIP code</span>
+                <input inputMode="numeric" name="zipCode" placeholder="48216" type="text" />
+              </label>
+              <label>
+                <span>Detroit connection</span>
+                <select defaultValue="Current resident" name="detroitConnection">
+                  <option>Current resident</option>
+                  <option>Moving to Detroit</option>
+                  <option>Former resident</option>
+                  <option>Supporter / partner</option>
+                </select>
+              </label>
+              <label>
+                <span>Here to</span>
+                <select defaultValue="Help others" name="hereTo">
+                  <option>Help others</option>
+                  <option>Find help</option>
+                  <option>Both</option>
+                </select>
+              </label>
+              <label>
+                <span>Neighborhood expertise</span>
+                <input name="neighborhoodExpertise" placeholder="Southwest Detroit, Corktown, Midtown" type="text" />
+              </label>
+              <label>
+                <span>Languages spoken</span>
+                <input name="languages" placeholder="English, Spanish" type="text" />
+              </label>
+            </div>
+          </section>
+
+          <section className="form-section">
+            <div className="section-intro">
+              <span className="step">02</span>
+              <h2>Connection Areas</h2>
+            </div>
+            <div className="topic-groups">
+              {helperTopicGroups.map((group) => (
+                <fieldset key={group.label}>
+                  <legend>{group.label}</legend>
+                  {group.topics.map((topic) => (
+                    <label key={topic}>
+                      <input name="topics" type="checkbox" value={topic} /> {topic}
+                    </label>
+                  ))}
+                </fieldset>
+              ))}
+              <label className="other-field">
+                <span>Other topic</span>
+                <input name="otherTopic" placeholder="Add a topic" type="text" />
+              </label>
+            </div>
+          </section>
+
+          <section className="form-section">
+            <div className="section-intro">
+              <span className="step">03</span>
+              <h2>Identity</h2>
+            </div>
+            <div className="field-grid two">
+              <label>
+                <span>First name</span>
+                <input name="firstName" placeholder="Maria" required type="text" />
+              </label>
+              <label>
+                <span>Last name</span>
+                <input name="lastName" placeholder="Rodriguez" required type="text" />
+              </label>
+              <label>
+                <span>Email</span>
+                <input name="email" placeholder="maria@example.com" type="email" />
+              </label>
+              <label>
+                <span>Phone number <em>optional</em></span>
+                <input name="phone" placeholder="(313) 555-0148" type="tel" />
+              </label>
+              <label>
+                <span>Preferred contact</span>
+                <select defaultValue="Email" name="preferredContact">
+                  <option>Email</option>
+                  <option>Phone</option>
+                  <option>Platform messaging</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section className="form-section">
+            <div className="section-intro">
+              <span className="step">04</span>
+              <h2>Community Background</h2>
+            </div>
+            <div className="field-grid two">
+              <label>
+                <span>Current employer</span>
+                <input name="currentEmployer" placeholder="Detroit nonprofit, startup, school..." type="text" />
+              </label>
+              <label>
+                <span>Industry</span>
+                <input name="industry" placeholder="Community development" type="text" />
+              </label>
+              <label>
+                <span>Job title</span>
+                <input name="jobTitle" placeholder="Community Development Manager" type="text" />
+              </label>
+              <label>
+                <span>Organization type</span>
+                <input name="organizationType" placeholder="Nonprofit, business, school..." type="text" />
+              </label>
+            </div>
+            <div className="tag-panel">
+              <span>Skills</span>
+              <div className="tag-list">
+                {profileSkills.map((skill) => (
+                  <label key={skill}>
+                    <input name="skills" type="checkbox" value={skill} /> {skill}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label className="wide-field">
+              <span>Organizations & affiliations</span>
+              <textarea name="organizations" placeholder="Neighborhood association, nonprofit, alumni group, faith organization..." />
+            </label>
+          </section>
+
+          <section className="form-section">
+            <div className="section-intro">
+              <span className="step">05</span>
+              <h2>Availability</h2>
+            </div>
+            <div className="field-grid two">
+              <label>
+                <span>Years connected to Detroit</span>
+                <select defaultValue="New to Detroit" name="yearsConnected">
+                  <option>New to Detroit</option>
+                  <option>1-3 years</option>
+                  <option>4-10 years</option>
+                  <option>10+ years</option>
+                  <option>Lifelong Detroiter</option>
+                </select>
+              </label>
+            </div>
+            <div className="tag-panel">
+              <span>Available for</span>
+              <div className="tag-list">
+                {profileAvailability.map((item) => (
+                  <label key={item}>
+                    <input name="availability" type="checkbox" value={item} /> {item}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="action-row">
+              <button className="primary-button" type="submit">Create profile</button>
+            </div>
+          </section>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function ProfileAvatar({ avatar }: { avatar: AvatarKey }) {
+  if (avatar === "tire") {
+    return (
+      <svg aria-hidden="true" className="profile-avatar-graphic" viewBox="0 0 24 24">
+        <circle className="avatar-back" cx="12" cy="12" r="10" />
+        <circle className="tire-wall" cx="12" cy="12" r="6.4" />
+        <circle className="tire-hole" cx="12" cy="12" r="2.7" />
+        <path className="tire-tread" d="M12 5.6v2" /><path className="tire-tread" d="M12 16.4v2" />
+        <path className="tire-tread" d="M5.6 12h2" /><path className="tire-tread" d="M16.4 12h2" />
+        <path className="tire-tread" d="m7.5 7.5 1.4 1.4" /><path className="tire-tread" d="m15.1 15.1 1.4 1.4" />
+      </svg>
+    );
+  }
+
+  if (avatar === "boat") {
+    return (
+      <svg aria-hidden="true" className="profile-avatar-graphic" viewBox="0 0 24 24">
+        <circle className="avatar-back boat-back" cx="12" cy="12" r="10" />
+        <path className="boat-sail" d="M12 6.2v7.1" /><path className="boat-sail" d="M12 7.1 7.7 13.3H12" />
+        <path className="boat-sail" d="M13 8.2l3.9 5.1H13" />
+        <path className="boat-hull" d="M5.2 14.2h13.6l-1.8 2.4c-.7.9-1.8 1.4-3 1.4H10c-1.2 0-2.3-.5-3-1.4l-1.8-2.4Z" />
+        <path className="water-line" d="M6 18.8c1.2-.7 2.4-.7 3.6 0s2.4.7 3.6 0 2.4-.7 3.6 0" />
+      </svg>
+    );
+  }
+
+  if (avatar === "car") {
+    return (
+      <svg aria-hidden="true" className="profile-avatar-graphic" viewBox="0 0 24 24">
+        <circle className="avatar-back car-back" cx="12" cy="12" r="10" />
+        <path className="speed-mark" d="M3.2 10.1h4.1" /><path className="speed-mark" d="M2.8 13h3.2" />
+        <path className="race-body" d="M4.5 15.2h15.1l-1.1-3.1-4.1-.7-2.4-2.3H8.7L6.4 12l-1.9 3.2Z" />
+        <path className="race-window" d="M9.2 10.2h2.6l1.3 1.4H8.2l1-1.4Z" />
+        <circle cx="7.7" cy="15.5" r="1.6" /><circle cx="16.6" cy="15.5" r="1.6" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" className="profile-avatar-graphic" viewBox="0 0 24 24">
+      <circle className="avatar-back pizza-back" cx="12" cy="12" r="10" />
+      <path className="pizza-crust" d="M6.1 6.8c3.8-1.6 8-1.6 11.8 0" />
+      <path className="pizza-slice" d="M6.5 7.5h11L12 18.2 6.5 7.5Z" />
+      <path className="pizza-cheese" d="M10.4 11.1c.6.6 1.1 1.5 1 2.8" />
+      <circle className="pizza-topping" cx="9.5" cy="9.8" r=".7" /><circle className="pizza-topping" cx="14.5" cy="10.4" r=".7" />
+      <circle className="pizza-topping" cx="12" cy="13.2" r=".7" />
+    </svg>
+  );
+}
+
+function Header({ activeView, navigate }: { activeView: View; navigate: (view: View) => void }) {
   return (
     <header className="topbar">
       <button className="brand" onClick={() => navigate("home")} type="button">
@@ -666,7 +991,7 @@ function Header({ activeView, navigate, onCreateProfile }: { activeView: View; n
           <button className={activeView === item.id ? "active" : ""} key={item.id} onClick={() => navigate(item.id)} type="button">{item.label}</button>
         ))}
       </nav>
-      <button className="profile-button" onClick={onCreateProfile} type="button">Create profile</button>
+      <button className={`profile-button ${activeView === "profile" ? "active" : ""}`} onClick={() => navigate("profile")} type="button">Create profile</button>
     </header>
   );
 }
