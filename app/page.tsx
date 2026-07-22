@@ -44,6 +44,7 @@ type Connector = {
   friendRecommendations?: string[];
   experience?: string;
   workedWithNote?: string;
+  verificationLabel?: string;
 };
 
 type ConnectorDetail = {
@@ -158,6 +159,22 @@ const connectors: Connector[] = [
     color: "green",
   },
 ];
+
+const communityProfiles: Connector[] = [
+  { id: "priya-lawson", name: "Priya Lawson", role: "Housing advocate", neighborhood: "Midtown", type: "Person", topics: ["Housing", "Schools", "Moving"], initials: "PL", color: "purple", verificationLabel: "Detroit Connect member" },
+  { id: "marcus-lee", name: "Marcus Lee", role: "Small business owner", neighborhood: "East Village", type: "Person", topics: ["Business", "Moving", "Neighborhoods"], initials: "ML", color: "gold", verificationLabel: "Detroit Connect member" },
+  { id: "jordan-smith", name: "Jordan Smith", role: "Neighborhood volunteer", neighborhood: "Corktown", type: "Person", topics: ["Housing", "Schools", "Community"], initials: "JS", color: "blue", verificationLabel: "Detroit Connect member" },
+  { id: "amara-king", name: "Amara King", role: "Small business mentor", neighborhood: "Eastern Market", type: "Person", topics: ["Business", "Permits", "Events"], initials: "AK", color: "gold", verificationLabel: "Detroit Connect member" },
+  { id: "devon-taylor", name: "Devon Taylor", role: "New Detroit resident", neighborhood: "Midtown", type: "Person", topics: ["Moving", "Utilities", "Transit"], initials: "DT", color: "green", verificationLabel: "Detroit Connect member" },
+  { id: "jordan-lee", name: "Jordan Lee", role: "Detroit resident", neighborhood: "New Center", type: "Person", topics: ["Housing", "Transit", "Neighborhoods"], initials: "JL", color: "blue", verificationLabel: "Detroit Connect member" },
+  { id: "simone-brooks", name: "Simone Brooks", role: "Neighborhood resident", neighborhood: "East English Village", type: "Person", topics: ["Housing", "Schools", "Neighborhoods"], initials: "SB", color: "purple", verificationLabel: "Detroit Connect member" },
+  { id: "darnell-lee", name: "Darnell Lee", role: "Food business advisor", neighborhood: "Eastern Market", type: "Person", topics: ["Business", "Permits", "Events"], initials: "DL", color: "gold", verificationLabel: "Detroit Connect member" },
+  { id: "nia-king", name: "Nia King", role: "Entrepreneur", neighborhood: "Eastern Market", type: "Person", topics: ["Business", "Food events", "Permits"], initials: "NK", color: "coral", verificationLabel: "Detroit Connect member" },
+  { id: "theo-carter", name: "Theo Carter", role: "Neighborhood organizer", neighborhood: "North End", type: "Person", topics: ["Community", "City services", "Moving"], initials: "TC", color: "navy", verificationLabel: "Detroit Connect member" },
+  { id: "elena-patel", name: "Elena Patel", role: "Detroit resident", neighborhood: "Midtown", type: "Person", topics: ["Moving", "Medical", "City services"], initials: "EP", color: "green", verificationLabel: "Detroit Connect member" },
+];
+
+const staticProfiles = [...connectors, ...communityProfiles];
 
 const initialPosts: ForumPost[] = [
   {
@@ -290,9 +307,9 @@ const navItems: Array<{ id: View; label: string }> = [
 ];
 
 const friends = [
-  { initials: "PL", name: "Priya Lawson", area: "Midtown" },
-  { initials: "ML", name: "Marcus Lee", area: "East Village" },
-  { initials: "JS", name: "Jordan Smith", area: "Corktown" },
+  { initials: "PL", name: "Priya Lawson", area: "Midtown", profileId: "priya-lawson" },
+  { initials: "ML", name: "Marcus Lee", area: "East Village", profileId: "marcus-lee" },
+  { initials: "JS", name: "Jordan Smith", area: "Corktown", profileId: "jordan-smith" },
 ];
 
 const connectorDetails: Record<string, ConnectorDetail> = {
@@ -362,7 +379,7 @@ function getConnectorDetail(connector: Connector): ConnectorDetail {
   return connectorDetails[connector.id] ?? {
     about: `${connector.name} helps Detroit residents with ${connector.topics.join(", ").toLowerCase()}.`,
     neighborhoodExpertise: [connector.neighborhood],
-    organization: connector.name,
+    organization: connector.type === "Person" ? "Detroit Connect community" : connector.name,
     yearsConnected: "Connected to Detroit",
     languages: ["English"],
     availability: ["Messages"],
@@ -408,18 +425,19 @@ export default function HomePage() {
     });
   }, [directoryConnectors, query, typeFilter]);
 
-  const favoriteConnectors = directoryConnectors.filter((connector) => saved.has(connector.id));
+  const allProfiles = [...directoryConnectors, ...communityProfiles];
+  const favoriteConnectors = allProfiles.filter((connector) => saved.has(connector.id));
   const recommendedConnectors = directoryConnectors.filter((connector) => {
     if (!connector.friendRecommendations?.length) return false;
     return selectedFriend === "All friends" || connector.friendRecommendations.includes(selectedFriend);
   });
-  const workedWithConnectors = directoryConnectors.filter((connector) => workedWith.has(connector.id));
-  const selectedConnector = directoryConnectors.find((connector) => connector.id === selectedConnectorId) ?? directoryConnectors[0];
+  const workedWithConnectors = allProfiles.filter((connector) => workedWith.has(connector.id));
+  const selectedConnector = allProfiles.find((connector) => connector.id === selectedConnectorId) ?? directoryConnectors[0];
   const visiblePosts = forumTopic === "All" ? posts : posts.filter((post) => post.topic === forumTopic);
 
   useEffect(() => {
     const profileId = new URLSearchParams(window.location.search).get("profile");
-    if (!profileId || !connectors.some((connector) => connector.id === profileId)) return;
+    if (!profileId || !staticProfiles.some((connector) => connector.id === profileId)) return;
     const openSharedProfile = window.setTimeout(() => {
       setSelectedConnectorId(profileId);
       setView("connector-profile");
@@ -782,21 +800,28 @@ export default function HomePage() {
               >
                 All recommendations <span>{directoryConnectors.filter((item) => item.friendRecommendations?.length).length}</span>
               </button>
-              {friends.map(({ initials, name, area }) => (
-                <button
-                  aria-pressed={selectedFriend === name}
+              {friends.map(({ initials, name, area, profileId }) => (
+                <div
                   className={`friend-row ${selectedFriend === name ? "active" : ""}`}
                   key={name}
-                  onClick={() => {
-                    setSelectedFriend(name);
-                    setFriendView("recommendations");
-                  }}
-                  type="button"
                 >
-                  <span>{initials}</span>
-                  <div><strong>{name}</strong><small>{area}</small></div>
-                  <span className="friend-count">{directoryConnectors.filter((item) => item.friendRecommendations?.includes(name)).length}</span>
-                </button>
+                  <button className="friend-profile-link" onClick={() => openConnectorProfile(profileId)} type="button">
+                    <span>{initials}</span>
+                    <span><strong>{name}</strong><small>{area}</small></span>
+                  </button>
+                  <button
+                    aria-label={`Show recommendations from ${name}`}
+                    aria-pressed={selectedFriend === name}
+                    className="friend-count"
+                    onClick={() => {
+                      setSelectedFriend(name);
+                      setFriendView("recommendations");
+                    }}
+                    type="button"
+                  >
+                    {directoryConnectors.filter((item) => item.friendRecommendations?.includes(name)).length}
+                  </button>
+                </div>
               ))}
               <button className="friend-add" onClick={() => announce("Friend invite copied")} type="button">
                 <Plus size={16} /> Add by name or email
@@ -839,8 +864,14 @@ export default function HomePage() {
               {visiblePosts.map((post) => (
                 <article className="forum-post" id={`post-${post.id}`} key={post.id}>
                   <header>
-                    <span className="post-avatar">{post.initials}</span>
-                    <div><strong>{post.author}</strong><small>{post.meta}</small></div>
+                    <ProfileByline
+                      initials={post.initials}
+                      kind="post"
+                      meta={post.meta}
+                      name={post.author}
+                      onOpen={openConnectorProfile}
+                      profile={allProfiles.find((profile) => profile.name === post.author)}
+                    />
                     <span className="post-topic">{post.topic}</span>
                   </header>
                   <h2>{post.title}</h2>
@@ -880,12 +911,15 @@ export default function HomePage() {
                       </div>
                       {(postComments[post.id] ?? []).map((comment) => (
                         <div className="comment-entry" key={comment.id}>
-                          <span>{comment.initials}</span>
-                          <div>
-                            <strong>{comment.author}</strong>
-                            <small>{comment.meta}</small>
-                            <p>{comment.body}</p>
-                          </div>
+                          <ProfileByline
+                            body={comment.body}
+                            initials={comment.initials}
+                            kind="comment"
+                            meta={comment.meta}
+                            name={comment.author}
+                            onOpen={openConnectorProfile}
+                            profile={allProfiles.find((profile) => profile.name === comment.author)}
+                          />
                         </div>
                       ))}
                       <form className="comment-form" onSubmit={(event) => submitComment(event, post.id)}>
@@ -1201,11 +1235,43 @@ function PageLead({ eyebrow, title }: { eyebrow: string; title: string }) {
   return <header className="page-lead"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1></header>;
 }
 
+function ProfileByline({ initials, name, meta, body, kind, profile, onOpen }: { initials: string; name: string; meta: string; body?: string; kind: "post" | "comment"; profile?: Connector; onOpen: (id: string) => void }) {
+  const avatarClass = kind === "post" ? "post-avatar" : "comment-avatar";
+
+  if (!profile) {
+    return (
+      <>
+        <span className={avatarClass}>{initials}</span>
+        <div><strong>{name}</strong><small>{meta}</small>{body && <p>{body}</p>}</div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <button aria-label={`View ${name}'s profile`} className={`${avatarClass} profile-avatar-link`} onClick={() => onOpen(profile.id)} type="button">{initials}</button>
+      <div>
+        <button className="profile-byline-name" onClick={() => onOpen(profile.id)} type="button">{name}</button>
+        <small>{meta}</small>
+        {body && <p>{body}</p>}
+      </div>
+    </>
+  );
+}
+
 function ConnectorGrid({ connectors: items, saved, workedWith, toggleFavorite, toggleWorkedWith, openProfile, contextMode }: { connectors: Connector[]; saved: Set<string>; workedWith: Set<string>; toggleFavorite: (id: string) => void; toggleWorkedWith: (id: string) => void; openProfile: (id: string) => void; contextMode?: "recommendation" | "history" }) {
   return (
     <div className="connector-grid">
       {items.map((connector) => (
-        <article className="connector-card" key={connector.id}>
+        <article
+          aria-label={`View ${connector.name}'s profile`}
+          className="connector-card"
+          key={connector.id}
+          onClick={(event) => {
+            if ((event.target as Element).closest("button, a")) return;
+            openProfile(connector.id);
+          }}
+        >
           <header>
             <span className={`connector-avatar avatar-${connector.color}`}>{connector.initials}</span>
             <button aria-label={saved.has(connector.id) ? `Remove ${connector.name} from favorites` : `Save ${connector.name}`} onClick={() => toggleFavorite(connector.id)} type="button">
@@ -1213,7 +1279,7 @@ function ConnectorGrid({ connectors: items, saved, workedWith, toggleFavorite, t
             </button>
           </header>
           <span className="type-label"><TypeIcon type={connector.type} /> {connector.type}</span>
-          <h2>{connector.name}</h2>
+          <h2><button className="connector-name-button" onClick={() => openProfile(connector.id)} type="button">{connector.name}</button></h2>
           <p>{connector.role}</p>
           <span className="location"><MapPin size={15} /> {connector.neighborhood}</span>
           <div className="topic-list">{connector.topics.map((topic) => <span key={topic}>{topic}</span>)}</div>
@@ -1249,7 +1315,7 @@ function ConnectorProfileView({ connector, detail, isSaved, hasWorkedWith, onBac
       <header className="public-profile-hero">
         <span className={`public-profile-avatar avatar-${connector.color}`}>{connector.initials}</span>
         <div className="public-profile-identity">
-          <span className="profile-trust"><ShieldCheck size={15} /> Verified community connector</span>
+          <span className="profile-trust"><ShieldCheck size={15} /> {connector.verificationLabel ?? "Verified community connector"}</span>
           <h1 id="public-profile-title">{connector.name}</h1>
           <p>{connector.role}</p>
           <div className="profile-meta">

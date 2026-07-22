@@ -248,6 +248,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
+  cursor: pointer;
   display: flex;
   flex-direction: column;
   min-height: 350px;
@@ -261,6 +262,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .avatar-blue { background: #3b6a9b; }.avatar-gold { background: var(--gold); }.avatar-purple { background: var(--purple); }.avatar-coral { background: var(--coral); }.avatar-navy { background: var(--navy); }.avatar-green { background: var(--green); }
 .type-label { align-items: center; color: var(--muted); display: flex; font-size: 10px; font-weight: 800; gap: 5px; margin-top: 18px; text-transform: uppercase; }
 .connector-card h2 { font-family: Georgia, serif; font-size: 23px; font-weight: 600; line-height: 1.15; margin: 11px 0 7px; }
+.connector-name-button { background: transparent; border: 0; color: inherit; cursor: pointer; font: inherit; padding: 0; text-align: left; }.connector-name-button:hover { color: var(--gold); }
 .connector-card > p { color: #555e65; font-size: 13px; line-height: 1.45; margin: 0 0 13px; }
 .location { align-items: center; color: var(--navy); display: flex; font-size: 12px; font-weight: 700; gap: 5px; }
 .topic-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 17px 0; }
@@ -291,11 +293,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .friend-filter-all { align-items: center; background: transparent; border: 0; border-bottom: 1px solid rgba(255,255,255,0.12); color: white; cursor: pointer; display: flex; font-size: 11px; font-weight: 800; justify-content: space-between; min-height: 45px; padding: 0; width: 100%; }
 .friend-filter-all span, .friend-count { align-items: center; background: rgba(255,255,255,0.12); border-radius: 999px; color: white; display: flex; font-size: 9px; height: 22px; justify-content: center; min-width: 22px; padding: 0 6px; }
 .friend-filter-all.active { color: var(--gold-light); }
-.friend-row { align-items: center; background: transparent; border: 0; border-bottom: 1px solid rgba(255,255,255,0.12); color: white; cursor: pointer; display: grid; gap: 10px; grid-template-columns: 34px 1fr auto; padding: 15px 0; text-align: left; width: 100%; }
-.friend-row:hover, .friend-row.active { color: var(--gold-light); }
-.friend-row > span { align-items: center; background: var(--purple); border-radius: 50%; display: flex; font-size: 10px; font-weight: 850; height: 34px; justify-content: center; }
-.friend-row div { display: flex; flex-direction: column; }.friend-row strong { font-size: 12px; }.friend-row small { color: rgba(255,255,255,0.62); font-size: 10px; margin-top: 3px; }
-.friend-row .friend-count { background: rgba(255,255,255,0.12); height: 22px; min-width: 22px; }
+.friend-row { align-items: center; border-bottom: 1px solid rgba(255,255,255,0.12); color: white; display: grid; gap: 10px; grid-template-columns: 1fr auto; padding: 8px 0; width: 100%; }.friend-row.active { color: var(--gold-light); }
+.friend-profile-link { align-items: center; background: transparent; border: 0; color: inherit; cursor: pointer; display: grid; gap: 10px; grid-template-columns: 34px 1fr; min-height: 52px; padding: 0; text-align: left; width: 100%; }
+.friend-profile-link:hover { color: var(--gold-light); }
+.friend-profile-link > span:first-child { align-items: center; background: var(--purple); border-radius: 50%; color: white; display: flex; font-size: 10px; font-weight: 850; height: 34px; justify-content: center; width: 34px; }
+.friend-profile-link > span:last-child { display: flex; flex-direction: column; }.friend-row strong { font-size: 12px; }.friend-row small { color: rgba(255,255,255,0.62); font-size: 10px; margin-top: 3px; }
+.friend-row .friend-count { background: rgba(255,255,255,0.12); border: 0; cursor: pointer; height: 26px; min-width: 26px; }
 .friend-add { align-items: center; background: transparent; border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; color: white; cursor: pointer; display: flex; font-size: 11px; font-weight: 750; gap: 7px; justify-content: center; margin-top: 18px; min-height: 42px; width: 100%; }
 .network-empty { align-items: center; border: 1px dashed #cfc8bc; color: var(--muted); display: flex; font-size: 12px; justify-content: center; min-height: 180px; padding: 24px; text-align: center; }
 
@@ -345,8 +348,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .select-control svg { color: var(--navy); pointer-events: none; position: absolute; right: 11px; top: 50%; transform: translateY(-50%); }
 .forum-post { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 20px; }
 .forum-post header { align-items: center; display: grid; gap: 10px; grid-template-columns: 40px 1fr auto; }
-.post-avatar { align-items: center; background: var(--navy); border-radius: 50%; color: white; display: flex; font-size: 10px; font-weight: 800; height: 40px; justify-content: center; }
+.post-avatar { align-items: center; background: var(--navy); border: 0; border-radius: 50%; color: white; display: flex; font-size: 10px; font-weight: 800; height: 40px; justify-content: center; padding: 0; width: 40px; }
 .forum-post header div { display: flex; flex-direction: column; }.forum-post header strong { font-size: 12px; }.forum-post header small { color: var(--muted); font-size: 10px; margin-top: 3px; }
+.profile-avatar-link, .profile-byline-name { cursor: pointer; }.profile-avatar-link:hover { box-shadow: 0 0 0 3px rgba(184,121,20,0.28); }.profile-byline-name { background: transparent; border: 0; color: var(--ink); font-size: 12px; font-weight: 800; padding: 0; text-align: left; }.profile-byline-name:hover { color: var(--gold); text-decoration: underline; text-underline-offset: 3px; }
 .post-topic { background: #efe9de; border-radius: 4px; color: #685737; font-size: 9px; font-weight: 800; padding: 6px 8px; text-transform: uppercase; }
 .forum-post h2 { font-family: Georgia, serif; font-size: 21px; margin: 18px 0 8px; }.forum-post p { color: #525a60; font-size: 13px; line-height: 1.58; margin: 0; }
 .forum-post footer { border-top: 1px solid var(--line); display: flex; gap: 16px; margin-top: 18px; padding-top: 13px; }
@@ -366,8 +370,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .comment-form button[type="submit"] { background: var(--navy); color: white; }
 .comment-form button[type="submit"]:hover { background: var(--purple); }
 .comment-entry { align-items: flex-start; border-bottom: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: 34px 1fr; padding: 12px 2px; }
-.comment-entry > span { align-items: center; background: var(--purple); border-radius: 50%; color: white; display: flex; font-size: 8px; font-weight: 850; height: 34px; justify-content: center; }
+.comment-avatar, .comment-entry > span { align-items: center; background: var(--purple); border: 0; border-radius: 50%; color: white; display: flex; font-size: 8px; font-weight: 850; height: 34px; justify-content: center; padding: 0; width: 34px; }
 .comment-entry strong { font-size: 11px; }.comment-entry small { color: var(--muted); font-size: 9px; margin-left: 7px; }.comment-entry p { color: #515a61; font-size: 12px; margin: 4px 0 0; }
+.comment-entry .profile-byline-name { display: inline; font-size: 11px; }.comment-entry .profile-byline-name + small { margin-left: 7px; }
 
 .sr-only { clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 .view-explore { height: 100vh; overflow: hidden; }
