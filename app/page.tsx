@@ -876,7 +876,7 @@ export default function HomePage() {
 
       {view === "friends" && (
         <section className="content-view friends-view" aria-labelledby="friends-title">
-          <PageLead id="friends-title" title="Your network" />
+          <PageLead id="friends-title" title="Recommendations" />
           <div className="friends-layout">
             <section className="recommendations" aria-label="Connections and recommendations">
               <div className="friend-view-tabs" role="tablist" aria-label="Network views">
@@ -887,7 +887,7 @@ export default function HomePage() {
                   role="tab"
                   type="button"
                 >
-                  <Users size={16} /> Friends&apos; recommendations <span>{recommendedConnectors.length}</span>
+                  <Users size={16} /> From friends
                 </button>
                 <button
                   aria-selected={friendView === "worked"}
@@ -896,13 +896,18 @@ export default function HomePage() {
                   role="tab"
                   type="button"
                 >
-                  <Check size={16} /> Worked with <span>{workedWithConnectors.length}</span>
+                  <Check size={16} /> Worked with
                 </button>
               </div>
 
               {friendView === "recommendations" ? (
                 <>
-                  <div className="section-label"><Star size={17} /> {selectedFriend === "All friends" ? "Recommended by people you know" : `Recommended by ${selectedFriend}`}</div>
+                  {selectedFriend !== "All friends" && (
+                    <div className="network-filter-note">
+                      <span>Recommendations from {selectedFriend}</span>
+                      <button onClick={() => setSelectedFriend("All friends")} type="button">Show everyone</button>
+                    </div>
+                  )}
                   {recommendedConnectors.length ? (
                     <ConnectorGrid connectors={recommendedConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} openProfile={openConnectorProfile} contextMode="recommendation" />
                   ) : (
@@ -911,7 +916,6 @@ export default function HomePage() {
                 </>
               ) : (
                 <>
-                  <div className="section-label"><Check size={17} /> People and services you have worked with</div>
                   {workedWithConnectors.length ? (
                     <ConnectorGrid connectors={workedWithConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} openProfile={openConnectorProfile} contextMode="history" />
                   ) : (
@@ -922,8 +926,8 @@ export default function HomePage() {
             </section>
             <aside className="friends-panel">
               <div className="aside-title">
-                <span>Your friends</span>
-                <button aria-label="Add a friend" onClick={() => announce("Friend invite copied")} type="button"><Plus size={17} /></button>
+                <span>Friends</span>
+                <button onClick={() => announce("Friend invite copied")} type="button"><Plus aria-hidden="true" size={15} /> Add friend</button>
               </div>
               <button
                 className={`friend-filter-all ${selectedFriend === "All friends" ? "active" : ""}`}
@@ -933,7 +937,7 @@ export default function HomePage() {
                 }}
                 type="button"
               >
-                All recommendations <span>{directoryConnectors.filter((item) => item.friendRecommendations?.length).length}</span>
+                All friends
               </button>
               {friends.map(({ initials, name, area, profileId }) => (
                 <div
@@ -952,15 +956,12 @@ export default function HomePage() {
                       setSelectedFriend(name);
                       setFriendView("recommendations");
                     }}
-                    type="button"
-                  >
-                    {directoryConnectors.filter((item) => item.friendRecommendations?.includes(name)).length}
+                  type="button"
+                >
+                    See picks
                   </button>
                 </div>
               ))}
-              <button className="friend-add" onClick={() => announce("Friend invite copied")} type="button">
-                <Plus size={16} /> Add by name or email
-              </button>
             </aside>
           </div>
         </section>

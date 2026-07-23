@@ -238,24 +238,38 @@ button, input, textarea, select { font: inherit; }
 .worked-button { border-color: var(--ink); border-radius: 0; color: var(--ink); }
 .worked-button:hover, .worked-button.active { background: var(--ink); border-color: var(--ink); }
 
-.friend-view-tabs { border-bottom: 3px solid var(--ink); }
-.friend-view-tabs button.active { border-bottom-color: var(--teal); }
-.friend-view-tabs button > span { background: #e7edef; color: var(--ink); }
-.section-label { color: var(--teal); }
+.friends-view .page-lead { margin-bottom: 28px; }
+.friends-view .page-lead h1 { font-size: clamp(44px, 5vw, 60px); }
+.friends-layout { gap: 36px; grid-template-columns: minmax(0, 1fr) 260px; }
+.friends-view .connector-grid { gap: 20px; }
+.friends-view .connector-card { min-height: 330px; padding: 22px; }
+.friends-view .connector-card .recommended { display: none; }
+.friends-view .recommendations .connector-actions { grid-template-columns: 1fr; justify-items: end; }
+.friends-view .recommendations .connector-actions .worked-button { display: none; }
+.friend-view-tabs { border: 1px solid var(--line); display: inline-flex; gap: 0; margin-bottom: 24px; padding: 4px; width: auto; }
+.friend-view-tabs button { border: 0; margin: 0; min-height: 42px; padding-inline: 14px; }
+.friend-view-tabs button.active { background: var(--navy); border: 0; color: white; }
+.friend-view-tabs button > span { display: none; }
+.network-filter-note { align-items: center; background: #edf2f3; border-left: 3px solid var(--teal); display: flex; font-size: 13px; font-weight: 750; justify-content: space-between; margin-bottom: 18px; min-height: 46px; padding: 8px 12px; }
+.network-filter-note button { background: transparent; border: 0; color: var(--teal); font-size: 12px; font-weight: 800; min-height: 36px; padding-inline: 8px; }
 .friends-panel {
   background: white;
   border: 1px solid var(--line);
   border-radius: 0;
-  box-shadow: 0 16px 36px rgba(24, 32, 38, 0.1);
+  box-shadow: 0 10px 24px rgba(24, 32, 38, 0.07);
   color: var(--ink);
-  top: 38px;
+  padding: 16px;
+  top: 28px;
 }
 .aside-title, .friend-filter-all, .friend-row { border-color: rgba(17, 19, 21, 0.2); color: var(--ink); }
-.aside-title button { background: var(--ink); color: white; }
-.friend-filter-all span, .friend-count, .friend-row .friend-count { background: rgba(17,19,21,0.12); color: var(--ink); }
+.aside-title { font-size: 15px; padding-bottom: 12px; }
+.aside-title button { align-items: center; background: var(--navy); border-radius: 0; color: white; display: inline-flex; font-size: 11px; font-weight: 800; gap: 5px; height: 36px; padding: 0 10px; width: auto; }
+.friend-filter-all { font-size: 13px; min-height: 48px; padding-inline: 10px; }
+.friend-filter-all.active { background: #e9eff1; color: var(--ink); }
 .friend-filter-all.active, .friend-row.active, .friend-profile-link:hover { color: var(--teal); }
+.friend-row { gap: 6px; padding: 5px 0; }
 .friend-row small { color: rgba(17,19,21,0.62); }
-.friend-add { background: var(--ink); border: 0; border-radius: 0; color: white; }
+.friend-row .friend-count { background: transparent; border: 0; border-radius: 0; color: var(--teal); font-size: 10px; font-weight: 850; height: 38px; min-width: 0; padding: 0 6px; white-space: nowrap; }
 
 .forum-layout { gap: 30px; grid-template-columns: 214px minmax(0, 1fr); }
 .topic-nav { background: white; border: 1px solid var(--line); padding: 10px; top: 36px; }
@@ -406,6 +420,9 @@ button, input, textarea, select { font: inherit; }
   .topic-nav button { border-bottom-color: var(--line); color: var(--ink); min-height: 44px; padding-inline: 8px; }
   .topic-nav button.active { border-bottom: 4px solid var(--teal); }
   .friends-panel, .profile-facts { position: static; }
+  .friends-layout { gap: 24px; grid-template-columns: 1fr; }
+  .friend-view-tabs { display: flex; width: 100%; }
+  .friend-view-tabs button { flex: 1; justify-content: center; }
   .public-profile-hero { grid-template-columns: 86px 1fr; padding: 24px; }
   .public-profile-actions { grid-column: 1 / -1; }
   .create-profile-view { padding: 104px 18px 148px; }
@@ -429,6 +446,7 @@ button, input, textarea, select { font: inherit; }
   .ai-search input { font-size: 16px; }
   .ai-search button { font-size: 14px; gap: 6px; min-width: 96px; padding-inline: 12px; }
   .page-lead h1 { font-size: 40px; }
+  .friends-view .page-lead h1 { font-size: clamp(28px, 8vw, 34px); }
   .topic-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .directory-search { grid-template-columns: minmax(0, 1fr) 96px; }
   .directory-query { grid-column: 1; grid-row: 1; }
