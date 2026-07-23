@@ -251,12 +251,21 @@ button, input, textarea, select { font: inherit; }
 .friends-view .page-lead h1 { font-size: clamp(44px, 5vw, 60px); }
 .friends-layout { gap: 36px; grid-template-columns: minmax(0, 1fr) 260px; }
 .friends-view .connector-grid { gap: 20px; }
-.friends-view .connector-card { --recommendation-accent: var(--friends-accent); border-top-color: var(--recommendation-accent); min-height: 330px; padding: 22px; }
-.friends-view .connector-card:nth-child(even) { --recommendation-accent: var(--favorites-accent); border-top-color: var(--recommendation-accent); }
-.friends-view .connector-card:nth-child(odd) { border-top-color: var(--recommendation-accent); }
+.friends-view .connector-card {
+  --recommendation-accent: var(--friends-accent);
+  --recommendation-soft: var(--friends-soft);
+  background: var(--recommendation-soft);
+  border-top-color: var(--recommendation-accent);
+  min-height: 330px;
+  padding: 22px;
+}
+.friends-view .connector-card:nth-child(4n + 2) { --recommendation-accent: var(--favorites-accent); --recommendation-soft: var(--favorites-soft); }
+.friends-view .connector-card:nth-child(4n + 3) { --recommendation-accent: var(--notifications-accent); --recommendation-soft: var(--notifications-soft); }
+.friends-view .connector-card:nth-child(4n) { --recommendation-accent: var(--forum-accent); --recommendation-soft: var(--forum-soft); }
 .friends-view .connector-card:hover { border-color: var(--recommendation-accent); }
 .friends-view .connector-avatar { background: var(--recommendation-accent); }
-.friends-view .experience-note { background: #f3f4f4; border-left-color: var(--recommendation-accent); }
+.friends-view .connector-card > header button, .friends-view .topic-list span { background: rgba(255, 255, 255, 0.78); }
+.friends-view .experience-note { background: rgba(255, 255, 255, 0.72); border-left-color: var(--recommendation-accent); }
 .friends-view .experience-note svg { color: var(--recommendation-accent); }
 .friends-view .connector-card .recommended { display: none; }
 .friends-view .recommendations .connector-actions { grid-template-columns: 1fr; justify-items: end; }
@@ -270,7 +279,6 @@ button, input, textarea, select { font: inherit; }
 .friends-panel {
   background: white;
   border: 1px solid var(--line);
-  border-top: 3px solid var(--favorites-accent);
   border-radius: 0;
   box-shadow: 0 10px 24px rgba(24, 32, 38, 0.07);
   color: var(--ink);
@@ -278,7 +286,7 @@ button, input, textarea, select { font: inherit; }
   top: 28px;
 }
 .aside-title, .friend-filter-all, .friend-row { border-color: rgba(17, 19, 21, 0.2); color: var(--ink); }
-.aside-title { font-size: 15px; padding-bottom: 12px; }
+.aside-title { background: var(--favorites-soft); border-bottom: 0; font-size: 15px; margin: -16px -16px 10px; padding: 13px 12px; }
 .aside-title button { align-items: center; background: var(--favorites-accent); border-radius: 0; color: white; display: inline-flex; font-size: 11px; font-weight: 800; gap: 5px; height: 36px; padding: 0 10px; width: auto; }
 .friend-filter-all { font-size: 13px; min-height: 48px; padding-inline: 10px; }
 .friend-filter-all.active { background: var(--friends-soft); color: var(--ink); }
@@ -286,7 +294,8 @@ button, input, textarea, select { font: inherit; }
 .friend-row { gap: 6px; padding: 5px 0; }
 .friend-row small { color: rgba(17,19,21,0.62); }
 .friend-profile-link > span:first-child { background: var(--friends-accent); }
-.friend-row:nth-child(even) .friend-profile-link > span:first-child { background: var(--favorites-accent); }
+.friend-row:nth-child(4n) .friend-profile-link > span:first-child { background: var(--favorites-accent); }
+.friend-row:nth-child(4n + 1) .friend-profile-link > span:first-child { background: var(--notifications-accent); }
 .friend-row .friend-count { background: transparent; border: 0; border-radius: 0; color: var(--friends-accent); font-size: 10px; font-weight: 850; height: 38px; min-width: 0; padding: 0 6px; white-space: nowrap; }
 
 .favorites-view .page-lead::after { background: var(--favorites-accent); }
