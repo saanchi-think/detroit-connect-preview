@@ -1,0 +1,72 @@
+insert into public.connector_profiles (
+  id,
+  owner_id,
+  kind,
+  status,
+  name,
+  headline,
+  neighborhood,
+  preferred_contact_method,
+  languages,
+  topics,
+  availability,
+  created_at,
+  updated_at
+)
+values
+  (
+    '11111111-1111-4111-8111-000000000001',
+    null,
+    'person',
+    'published',
+    'Maria Rodriguez',
+    'Community development connector',
+    'Southwest Detroit',
+    'Email',
+    array['English', 'Spanish'],
+    array['Housing', 'Schools', 'Neighborhoods'],
+    array['Messages'],
+    '2026-07-01T12:00:00.000Z',
+    '2026-07-01T12:00:00.000Z'
+  ),
+  (
+    '11111111-1111-4111-8111-000000000002',
+    null,
+    'person',
+    'published',
+    'Darnell Williams',
+    'City services navigator',
+    'Bagley',
+    'Email',
+    array['English'],
+    array['Utilities', 'City Services', 'Moving'],
+    array['Messages'],
+    '2026-07-02T12:00:00.000Z',
+    '2026-07-02T12:00:00.000Z'
+  ),
+  (
+    '11111111-1111-4111-8111-000000000003',
+    null,
+    'vendor',
+    'published',
+    'Aisha King',
+    'Small business advisor',
+    'New Center',
+    'Email',
+    array['English'],
+    array['Business', 'Permits', 'Finances'],
+    array['Messages'],
+    '2026-07-03T12:00:00.000Z',
+    '2026-07-03T12:00:00.000Z'
+  )
+on conflict (id) do update set
+  kind = excluded.kind,
+  status = excluded.status,
+  name = excluded.name,
+  headline = excluded.headline,
+  neighborhood = excluded.neighborhood,
+  preferred_contact_method = excluded.preferred_contact_method,
+  languages = excluded.languages,
+  topics = excluded.topics,
+  availability = excluded.availability,
+  updated_at = excluded.updated_at;

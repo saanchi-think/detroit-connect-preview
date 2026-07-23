@@ -1,0 +1,44 @@
+[
+  {
+    "id": "local-forum-housing",
+    "author_id": "local-maria",
+    "initials": "MR",
+    "avatarClass": "avatar-blue",
+    "name": "Maria Rodriguez",
+    "meta": "Southwest Detroit connector · 12 min ago",
+    "topic": "Housing",
+    "title": "Looking for renter-friendly neighborhoods near reliable transit",
+    "body": "My sister is moving to Detroit for a healthcare job. She wants a quiet place, transit access, and grocery options nearby. What areas should she compare first?",
+    "commentName": "Jalen P.",
+    "comment": "Woodbridge and New Center are worth comparing if she wants Midtown access without being directly downtown.",
+    "created_at": "2026-07-20T13:48:00.000Z"
+  },
+  {
+    "id": "local-forum-business",
+    "author_id": "local-amara",
+    "initials": "AK",
+    "avatarClass": "avatar-gold",
+    "name": "Amara King",
+    "meta": "Small business mentor · 34 min ago",
+    "topic": "Business",
+    "title": "Who helps new food businesses understand Detroit permits?",
+    "body": "I’m helping a friend test a pop-up concept. We need plain-English guidance on licensing, inspections, shared kitchens, and neighborhood events.",
+    "commentName": "Nina S.",
+    "comment": "Eastern Market has good small business programming. I can share two contacts.",
+    "created_at": "2026-07-20T13:26:00.000Z"
+  },
+  {
+    "id": "local-forum-moving",
+    "author_id": "local-devon",
+    "initials": "DT",
+    "avatarClass": "avatar-coral",
+    "name": "Devon Taylor",
+    "meta": "New to Detroit · 1 hr ago",
+    "topic": "Moving",
+    "title": "Moving checklist for the first two weeks?",
+    "body": "What should I do first after arriving: utilities, parking, license updates, doctors, neighborhood groups, or something else I’m missing?",
+    "commentName": "Priya M.",
+    "comment": "Start with utilities and parking, then join your neighborhood association list.",
+    "created_at": "2026-07-20T13:00:00.000Z"
+  }
+]
