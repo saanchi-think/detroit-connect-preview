@@ -828,7 +828,7 @@ export default function HomePage() {
       )}
 
       {view === "favorites" && (
-        <section className="content-view" aria-labelledby="favorites-title">
+        <section className="content-view favorites-view" aria-labelledby="favorites-title">
           <PageLead id="favorites-title" title="Favorites" />
           {favoriteConnectors.length ? (
             <ConnectorGrid connectors={favoriteConnectors} saved={saved} workedWith={workedWith} toggleFavorite={toggleFavorite} toggleWorkedWith={toggleWorkedWith} openProfile={openConnectorProfile} />

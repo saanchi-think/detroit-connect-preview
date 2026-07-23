@@ -13,6 +13,14 @@
   --green: #3d746d;
   --teal: #315b69;
   --sky: #e6edef;
+  --forum-accent: #a95143;
+  --forum-soft: #f7ebe8;
+  --friends-accent: #2f6f8a;
+  --friends-soft: #e8f1f5;
+  --favorites-accent: #9b6a18;
+  --favorites-soft: #f8f0dd;
+  --notifications-accent: #71537e;
+  --notifications-soft: #f2edf4;
 }
 
 body { background: var(--paper); color: var(--ink); font-size: 16px; line-height: 1.5; }
@@ -239,19 +247,24 @@ button, input, textarea, select { font: inherit; }
 .worked-button:hover, .worked-button.active { background: var(--ink); border-color: var(--ink); }
 
 .friends-view .page-lead { margin-bottom: 28px; }
+.friends-view .page-lead::after { background: var(--friends-accent); }
 .friends-view .page-lead h1 { font-size: clamp(44px, 5vw, 60px); }
 .friends-layout { gap: 36px; grid-template-columns: minmax(0, 1fr) 260px; }
 .friends-view .connector-grid { gap: 20px; }
-.friends-view .connector-card { min-height: 330px; padding: 22px; }
+.friends-view .connector-card { border-top-color: var(--friends-accent); min-height: 330px; padding: 22px; }
+.friends-view .connector-card:nth-child(3n + 2), .friends-view .connector-card:nth-child(3n) { border-top-color: var(--friends-accent); }
+.friends-view .connector-card:hover { border-color: var(--friends-accent); }
+.friends-view .connector-avatar { background: var(--friends-accent); }
+.friends-view .experience-note { background: var(--friends-soft); border-left-color: var(--friends-accent); }
 .friends-view .connector-card .recommended { display: none; }
 .friends-view .recommendations .connector-actions { grid-template-columns: 1fr; justify-items: end; }
 .friends-view .recommendations .connector-actions .worked-button { display: none; }
 .friend-view-tabs { border: 1px solid var(--line); display: inline-flex; gap: 0; margin-bottom: 24px; padding: 4px; width: auto; }
 .friend-view-tabs button { border: 0; margin: 0; min-height: 42px; padding-inline: 14px; }
-.friend-view-tabs button.active { background: var(--navy); border: 0; color: white; }
+.friend-view-tabs button.active { background: var(--friends-accent); border: 0; color: white; }
 .friend-view-tabs button > span { display: none; }
-.network-filter-note { align-items: center; background: #edf2f3; border-left: 3px solid var(--teal); display: flex; font-size: 13px; font-weight: 750; justify-content: space-between; margin-bottom: 18px; min-height: 46px; padding: 8px 12px; }
-.network-filter-note button { background: transparent; border: 0; color: var(--teal); font-size: 12px; font-weight: 800; min-height: 36px; padding-inline: 8px; }
+.network-filter-note { align-items: center; background: var(--friends-soft); border-left: 3px solid var(--friends-accent); display: flex; font-size: 13px; font-weight: 750; justify-content: space-between; margin-bottom: 18px; min-height: 46px; padding: 8px 12px; }
+.network-filter-note button { background: transparent; border: 0; color: var(--friends-accent); font-size: 12px; font-weight: 800; min-height: 36px; padding-inline: 8px; }
 .friends-panel {
   background: white;
   border: 1px solid var(--line);
@@ -263,41 +276,57 @@ button, input, textarea, select { font: inherit; }
 }
 .aside-title, .friend-filter-all, .friend-row { border-color: rgba(17, 19, 21, 0.2); color: var(--ink); }
 .aside-title { font-size: 15px; padding-bottom: 12px; }
-.aside-title button { align-items: center; background: var(--navy); border-radius: 0; color: white; display: inline-flex; font-size: 11px; font-weight: 800; gap: 5px; height: 36px; padding: 0 10px; width: auto; }
+.aside-title button { align-items: center; background: var(--friends-accent); border-radius: 0; color: white; display: inline-flex; font-size: 11px; font-weight: 800; gap: 5px; height: 36px; padding: 0 10px; width: auto; }
 .friend-filter-all { font-size: 13px; min-height: 48px; padding-inline: 10px; }
-.friend-filter-all.active { background: #e9eff1; color: var(--ink); }
-.friend-filter-all.active, .friend-row.active, .friend-profile-link:hover { color: var(--teal); }
+.friend-filter-all.active { background: var(--friends-soft); color: var(--ink); }
+.friend-filter-all.active, .friend-row.active, .friend-profile-link:hover { color: var(--friends-accent); }
 .friend-row { gap: 6px; padding: 5px 0; }
 .friend-row small { color: rgba(17,19,21,0.62); }
-.friend-row .friend-count { background: transparent; border: 0; border-radius: 0; color: var(--teal); font-size: 10px; font-weight: 850; height: 38px; min-width: 0; padding: 0 6px; white-space: nowrap; }
+.friend-profile-link > span:first-child { background: var(--friends-accent); }
+.friend-row .friend-count { background: transparent; border: 0; border-radius: 0; color: var(--friends-accent); font-size: 10px; font-weight: 850; height: 38px; min-width: 0; padding: 0 6px; white-space: nowrap; }
+
+.favorites-view .page-lead::after { background: var(--favorites-accent); }
+.favorites-view .connector-card, .favorites-view .connector-card:nth-child(3n + 2), .favorites-view .connector-card:nth-child(3n) { border-top-color: var(--favorites-accent); }
+.favorites-view .connector-card:hover { border-color: var(--favorites-accent); }
+.favorites-view .connector-card > header button { background: var(--favorites-soft); color: var(--favorites-accent); }
+.favorites-view .empty-state { background: white; border-color: #d6bd87; }
+.favorites-view .empty-state > svg { color: var(--favorites-accent); }
+.favorites-view .empty-state button { background: var(--favorites-accent); }
 
 .forum-layout { gap: 30px; grid-template-columns: 214px minmax(0, 1fr); }
+.forum-view .page-lead::after { background: var(--forum-accent); }
 .topic-nav { background: white; border: 1px solid var(--line); padding: 10px; top: 36px; }
 .topic-nav button { border-bottom-color: var(--line); color: #536067; font-size: 15px; min-height: 48px; padding: 0 12px; }
-.topic-nav button.active { background: #e9eff1; border-left: 3px solid var(--navy); color: var(--ink); padding-left: 9px; }
+.topic-nav button.active { background: var(--forum-soft); border-left: 3px solid var(--forum-accent); color: var(--forum-accent); padding-left: 9px; }
 .post-composer {
   background: white;
   border: 0;
   border-radius: 0;
-  border-top: 4px solid var(--teal);
+  border-top: 4px solid var(--forum-accent);
   box-shadow: 0 16px 36px rgba(17,19,21,0.09);
   gap: 12px;
   padding: 24px;
 }
+.composer-heading svg { color: var(--forum-accent); }
 .post-composer input, .post-composer textarea, .post-composer select { background: var(--paper); border-color: var(--line); border-radius: 0; }
-.topic-select > span:first-child { color: var(--teal); }
+.topic-select > span:first-child { color: var(--forum-accent); }
 .forum-post { border: 0; border-left: 5px solid transparent; border-radius: 0; box-shadow: 0 12px 28px rgba(17,19,21,0.06); padding: 24px; }
 .forum-post:nth-of-type(3n + 2), .forum-post:nth-of-type(3n) { border-left-color: transparent; }
-.post-topic { background: #e8eff1; color: #3b5059; }
-.forum-post footer button span { color: var(--teal); }
-.comment-thread { background: var(--paper); border-radius: 0; }
+.post-topic { background: var(--forum-soft); color: var(--forum-accent); }
+.forum-post footer button:hover, .forum-post footer button:hover span, .forum-post footer button svg, .forum-post footer button span { color: var(--forum-accent); }
+.comment-thread { background: var(--forum-soft); border-radius: 0; }
+.comment-thread-heading span { color: var(--forum-accent); }
+.comment-avatar, .comment-entry > span { background: var(--forum-accent); }
 .share-panel { border-radius: 0; }
 
 .notification-list { border: 0; border-radius: 0; box-shadow: 0 16px 34px rgba(17,19,21,0.07); }
+.notifications-view .page-lead::after { background: var(--notifications-accent); }
+.notifications-view .notification-toolbar button { color: var(--notifications-accent); }
 .notification-row { min-height: 106px; padding: 19px 22px; }
-.notification-row.unread { background: white; box-shadow: inset 4px 0 var(--gold); }
-.notification-row:hover { background: #edf2f3; }
-.notification-avatar { border-radius: 0; }
+.notification-row.unread { background: var(--notifications-soft); box-shadow: inset 4px 0 var(--notifications-accent); }
+.notification-row:hover { background: var(--notifications-soft); }
+.notification-avatar { background: var(--notifications-accent); border-radius: 0; }
+.notification-dot { background: var(--notifications-accent); }
 
 .public-profile-hero {
   background: var(--navy-deep);
