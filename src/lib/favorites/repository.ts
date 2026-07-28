@@ -1,6 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile } from "node:fs/promises";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { getLocalDataPath, writeLocalJson } from "@/lib/local-data";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -10,7 +10,7 @@ type LocalFavoriteRecord = {
   created_at: string;
 };
 
-const LOCAL_FAVORITES_PATH = path.join(process.cwd(), "data", "local-dev-favorites.json");
+const LOCAL_FAVORITES_PATH = getLocalDataPath("local-dev-favorites.json");
 const LOCAL_DEV_USER_ID = "local-dev-user";
 
 function favoriteUserId(user?: User | null) {
@@ -32,8 +32,7 @@ async function readLocalFavorites() {
 }
 
 async function writeLocalFavorites(records: LocalFavoriteRecord[]) {
-  await mkdir(path.dirname(LOCAL_FAVORITES_PATH), { recursive: true });
-  await writeFile(LOCAL_FAVORITES_PATH, `${JSON.stringify(records, null, 2)}\n`, "utf8");
+  await writeLocalJson(LOCAL_FAVORITES_PATH, records);
 }
 
 async function getSupabaseFavorites(user?: User | null) {

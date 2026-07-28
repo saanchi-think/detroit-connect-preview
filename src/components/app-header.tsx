@@ -9,6 +9,8 @@ import {
   LogOut,
   MapPin,
   MessageCircle,
+  Send,
+  Settings,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -20,16 +22,29 @@ const navItems = [
   { href: "/", label: "Home", mobileLabel: "Home", icon: House },
   { href: "/forum", label: "Community Forum", mobileLabel: "Forum", icon: MessageCircle },
   { href: "/explore", label: "Explore Detroit", mobileLabel: "Explore", icon: MapPin },
-  { href: "/friends", label: "Friends", mobileLabel: "Friends", icon: Users },
+  { href: "/network", label: "Network", mobileLabel: "Network", icon: Users },
   { href: "/favorites", label: "Favorites", mobileLabel: "Saved", icon: Bookmark },
+  { href: "/messages", label: "Messages", mobileLabel: "Messages", icon: Send },
   { href: "/notifications", label: "Notifications", mobileLabel: "Alerts", icon: Bell },
 ];
 
 export function AppHeader() {
   const pathname = usePathname();
   const [email, setEmail] = useState<string | null>(null);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
   useEffect(() => {
+    function refreshUnreadMessages() {
+      fetch("/api/messages/unread-count", { cache: "no-store" })
+        .then((response) => response.json())
+        .then((payload: { count?: number }) => {
+          setUnreadMessageCount(Number.isFinite(payload.count) ? Math.max(0, Number(payload.count)) : 0);
+        })
+        .catch(() => undefined);
+    }
+
+    refreshUnreadMessages();
+
     try {
       const supabase = createClient();
 
@@ -44,6 +59,7 @@ export function AppHeader() {
         data: { subscription },
       } = supabase.auth.onAuthStateChange((_event, session) => {
         setEmail(session?.user.email ?? null);
+        refreshUnreadMessages();
       });
 
       return () => subscription.unsubscribe();
@@ -83,18 +99,36 @@ export function AppHeader() {
               <Icon aria-hidden="true" className="nav-item-icon" size={18} />
               <span className="nav-label nav-label-desktop">{item.label}</span>
               <span className="nav-label nav-label-mobile">{item.mobileLabel}</span>
+              {item.href === "/messages" && unreadMessageCount > 0 ? (
+                <span
+                  aria-label={`${unreadMessageCount} unread ${unreadMessageCount === 1 ? "message" : "messages"}`}
+                  className="nav-unread-badge"
+                >
+                  {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
+                </span>
+              ) : null}
             </Link>
           );
         })}
       </nav>
       <div className="sidebar-actions">
-        <Link
-          className={`profile-button ${pathname.startsWith("/profile") || pathname.startsWith("/connectors/") ? "active" : ""}`}
-          href={email ? "/profile" : "/create-profile"}
-        >
-          <CircleUserRound aria-hidden="true" size={17} />
-          <span>{email ? "My profile" : "Create profile"}</span>
-        </Link>
+        <div className="sidebar-account-links">
+          <Link
+            className={`profile-button ${pathname.startsWith("/profile") || pathname.startsWith("/connectors/") ? "active" : ""}`}
+            href="/profile"
+          >
+            <CircleUserRound aria-hidden="true" size={17} />
+            <span>My profile</span>
+          </Link>
+          <Link
+            aria-label="Settings"
+            className={`settings-button ${pathname.startsWith("/settings") ? "active" : ""}`}
+            href="/settings"
+            title="Settings"
+          >
+            <Settings aria-hidden="true" size={17} />
+          </Link>
+        </div>
         {email ? (
           <button className="sidebar-session-action" type="button" onClick={handleSignOut}>
             <LogOut aria-hidden="true" size={15} />

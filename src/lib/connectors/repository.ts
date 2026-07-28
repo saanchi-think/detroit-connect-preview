@@ -1,13 +1,14 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile } from "node:fs/promises";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { Database, ProfileKind } from "@/lib/database.types";
 import { sampleConnectors } from "@/lib/data/sample-connectors";
+import { getLocalDataPath, writeLocalJson } from "@/lib/local-data";
 import type {
   AvatarKey,
   ConnectorCardModel,
   ConnectorProfileModel,
   CreateConnectorProfileInput,
+  UpdateConnectorProfileInput,
 } from "@/lib/connectors/types";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -15,17 +16,57 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 type ConnectorRow = Database["public"]["Tables"]["connector_profiles"]["Row"];
 type ConnectorInsert = Database["public"]["Tables"]["connector_profiles"]["Insert"];
 
-type LocalConnectorRecord = Omit<ConnectorRow, "search_document"> & {
+type LocalConnectorRecord = Omit<ConnectorRow, "search_document" | "avatar_url"> & {
+  avatar_url?: string | null;
   friend_signal?: string | null;
 };
 
 type SearchConnectorOptions = {
   query?: string;
   type?: string;
+  sort?: string;
+  language?: string;
+  neighborhood?: string;
+  topic?: string;
+  page?: number;
+  pageSize?: number;
 };
 
-const LOCAL_STORE_PATH = path.join(process.cwd(), "data", "local-dev-store.json");
+export type ConnectorFilterOptions = {
+  languages: string[];
+  neighborhoods: string[];
+  topics: string[];
+};
+
+export type ConnectorSearchPage = {
+  connectors: ConnectorCardModel[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export type AiConnectorSearchOptions = {
+  query: string;
+  topics: string[];
+  languages: string[];
+  neighborhoods: string[];
+  type?: "person" | "organization";
+  limit?: number;
+};
+
+export type AiConnectorMatch = {
+  connector: ConnectorCardModel;
+  matchedTopics: string[];
+  matchedLanguages: string[];
+  matchedNeighborhood: string | null;
+  matchedKeywords: string[];
+  score: number;
+};
+
+const LOCAL_STORE_PATH = getLocalDataPath("local-dev-store.json");
 const SAMPLE_ID_PREFIX = "11111111-1111-4111-8111-";
+export const LOCAL_DEMO_USER_ID = "local-dev-user";
 
 function getSupabaseReadClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -67,6 +108,7 @@ function seedRecordFromSample(connector: ConnectorCardModel, index: number): Loc
     created_at: createdAt,
     updated_at: createdAt,
     avatar_key: null,
+    avatar_url: null,
     friend_signal: connector.friendSignal,
   };
 }
@@ -87,8 +129,7 @@ async function readLocalStore(seedWithSamples: boolean) {
 }
 
 async function writeLocalStore(records: LocalConnectorRecord[]) {
-  await mkdir(path.dirname(LOCAL_STORE_PATH), { recursive: true });
-  await writeFile(LOCAL_STORE_PATH, `${JSON.stringify(records, null, 2)}\n`, "utf8");
+  await writeLocalJson(LOCAL_STORE_PATH, records);
 }
 
 function normalizeQuery(value?: string) {
@@ -96,14 +137,27 @@ function normalizeQuery(value?: string) {
 }
 
 function matchesType(kind: ProfileKind, type?: string) {
-  return !type || type === "all" || kind === type;
+  const normalizedKind = kind === "vendor" ? "organization" : kind;
+  return !type || type === "all" || normalizedKind === type;
 }
 
 function filterConnectorRows(rows: LocalConnectorRecord[], options: SearchConnectorOptions) {
   const query = normalizeQuery(options.query);
+  const language = normalizeQuery(options.language);
+  const neighborhood = normalizeQuery(options.neighborhood);
+  const topic = normalizeQuery(options.topic);
 
   return rows.filter((row) => {
     if (row.status !== "published" || !matchesType(row.kind, options.type)) {
+      return false;
+    }
+    if (language && !row.languages.some((value) => value.toLowerCase() === language)) {
+      return false;
+    }
+    if (neighborhood && (row.neighborhood ?? "").toLowerCase() !== neighborhood) {
+      return false;
+    }
+    if (topic && !row.topics.some((value) => value.toLowerCase() === topic)) {
       return false;
     }
 
@@ -133,8 +187,88 @@ function filterConnectorRows(rows: LocalConnectorRecord[], options: SearchConnec
   });
 }
 
-function sortConnectorRows(rows: LocalConnectorRecord[]) {
-  return [...rows].sort((left, right) => right.created_at.localeCompare(left.created_at));
+function relevanceScore(row: LocalConnectorRecord, query: string) {
+  const normalizedName = row.name.toLowerCase();
+  const topics = row.topics.map((topic) => topic.toLowerCase());
+
+  if (normalizedName === query) return 0;
+  if (normalizedName.startsWith(query)) return 1;
+  if (topics.some((topic) => topic === query)) return 2;
+  if (normalizedName.includes(query)) return 3;
+  if (topics.some((topic) => topic.includes(query))) return 4;
+  return 5;
+}
+
+function tokenizeSearchText(value: string) {
+  const stopWords = new Set([
+    "about",
+    "after",
+    "and",
+    "are",
+    "can",
+    "detroit",
+    "find",
+    "for",
+    "from",
+    "help",
+    "i",
+    "in",
+    "is",
+    "looking",
+    "me",
+    "my",
+    "need",
+    "of",
+    "someone",
+    "that",
+    "the",
+    "to",
+    "want",
+    "who",
+    "with",
+  ]);
+
+  return Array.from(
+    new Set(
+      value
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, " ")
+        .split(/\s+/)
+        .filter((token) => token.length > 1 && !stopWords.has(token)),
+    ),
+  );
+}
+
+function includesCaseInsensitive(values: string[], expected: string) {
+  return values.some((value) => value.toLowerCase() === expected.toLowerCase());
+}
+
+function sortConnectorRows(rows: LocalConnectorRecord[], options: SearchConnectorOptions) {
+  const query = normalizeQuery(options.query);
+  const sort = options.sort || (query ? "relevance" : "newest");
+
+  return [...rows].sort((left, right) => {
+    if (sort === "name") {
+      return left.name.localeCompare(right.name);
+    }
+
+    if (sort === "neighborhood") {
+      return (
+        (left.neighborhood ?? "Detroit").localeCompare(right.neighborhood ?? "Detroit") ||
+        left.name.localeCompare(right.name)
+      );
+    }
+
+    if (sort === "relevance" && query) {
+      return (
+        relevanceScore(left, query) - relevanceScore(right, query) ||
+        right.created_at.localeCompare(left.created_at) ||
+        left.name.localeCompare(right.name)
+      );
+    }
+
+    return right.created_at.localeCompare(left.created_at) || left.name.localeCompare(right.name);
+  });
 }
 
 function dedupeConnectorRows(rows: LocalConnectorRecord[]) {
@@ -142,16 +276,15 @@ function dedupeConnectorRows(rows: LocalConnectorRecord[]) {
 }
 
 function rowToCard(row: LocalConnectorRecord): ConnectorCardModel {
+  const normalizedKind = row.kind === "vendor" ? "organization" : row.kind;
   return {
     id: row.id,
-    kind: row.kind,
+    kind: normalizedKind,
     name: row.name,
     role:
       row.headline ??
       row.organization_name ??
-      (row.kind === "vendor"
-        ? "Detroit service provider"
-        : row.kind === "organization"
+      (normalizedKind === "organization"
           ? "Community organization"
           : "Detroit connector"),
     neighborhood: row.neighborhood ?? "Detroit",
@@ -159,11 +292,11 @@ function rowToCard(row: LocalConnectorRecord): ConnectorCardModel {
     languages: row.languages.length > 0 ? row.languages : ["English"],
     friendSignal:
       row.friend_signal ??
-      (row.kind === "vendor"
-        ? "Available for local referrals"
-        : row.kind === "organization"
+      (normalizedKind === "organization"
           ? "Community-backed resource"
           : "Open to helping newcomers"),
+    avatarKey: normalizeAvatarKey(row.avatar_key),
+    avatarUrl: row.avatar_url ?? null,
   };
 }
 
@@ -190,6 +323,7 @@ function rowToProfile(row: LocalConnectorRecord): ConnectorProfileModel {
     availability: row.availability,
     trustBadges: row.trust_badges,
     avatarKey: normalizeAvatarKey(row.avatar_key),
+    avatarUrl: row.avatar_url ?? null,
   };
 }
 
@@ -201,6 +335,20 @@ async function getConnectorRows() {
   }
 
   return dedupeConnectorRows(await readLocalStore(true));
+}
+
+export async function getConnectorFilterOptions(): Promise<ConnectorFilterOptions> {
+  const rows = (await getConnectorRows()).filter((row) => row.status === "published");
+  const unique = (values: string[]) =>
+    Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((left, right) =>
+      left.localeCompare(right),
+    );
+
+  return {
+    languages: unique(rows.flatMap((row) => row.languages)),
+    neighborhoods: unique(rows.flatMap((row) => (row.neighborhood ? [row.neighborhood] : []))),
+    topics: unique(rows.flatMap((row) => row.topics)),
+  };
 }
 
 function buildConnectorInsert(input: CreateConnectorProfileInput): ConnectorInsert {
@@ -225,6 +373,7 @@ function buildConnectorInsert(input: CreateConnectorProfileInput): ConnectorInse
     availability: input.availability,
     trust_badges: [],
     avatar_key: input.avatarKey ?? null,
+    avatar_url: input.avatarUrl ?? null,
   };
 }
 
@@ -245,10 +394,109 @@ async function fetchSupabaseRows() {
 }
 
 export async function searchConnectorCards(options: SearchConnectorOptions = {}) {
-  const mergedRows = await getConnectorRows();
-  const filteredRows = sortConnectorRows(filterConnectorRows(mergedRows, options));
+  return (await searchConnectorCardPage(options)).connectors;
+}
 
-  return filteredRows.map(rowToCard);
+export async function searchConnectorProfiles(options: SearchConnectorOptions = {}) {
+  const rows = sortConnectorRows(filterConnectorRows(await getConnectorRows(), options), options);
+  const pageSize = Math.min(Math.max(Math.trunc(options.pageSize ?? 8), 1), 24);
+  return rows.slice(0, pageSize).map(rowToProfile);
+}
+
+export async function searchConnectorCardPage(
+  options: SearchConnectorOptions = {},
+): Promise<ConnectorSearchPage> {
+  const mergedRows = await getConnectorRows();
+  const filteredRows = sortConnectorRows(filterConnectorRows(mergedRows, options), options);
+  const pageSize = Math.min(Math.max(Math.trunc(options.pageSize ?? 24), 1), 60);
+  const total = filteredRows.length;
+  const totalPages = Math.max(Math.ceil(total / pageSize), 1);
+  const page = Math.min(Math.max(Math.trunc(options.page ?? 1), 1), totalPages);
+  const start = (page - 1) * pageSize;
+
+  return {
+    connectors: filteredRows.slice(start, start + pageSize).map(rowToCard),
+    page,
+    pageSize,
+    total,
+    totalPages,
+  };
+}
+
+export async function rankConnectorsForAiSearch(
+  options: AiConnectorSearchOptions,
+): Promise<AiConnectorMatch[]> {
+  const tokens = tokenizeSearchText(options.query);
+  const rows = (await getConnectorRows()).filter((row) => {
+    if (row.status !== "published") return false;
+    if (!options.type) return true;
+    return (row.kind === "vendor" ? "organization" : row.kind) === options.type;
+  });
+
+  const ranked = rows.map((row) => {
+    const card = rowToCard(row);
+    const matchedTopics = options.topics.filter((topic) => includesCaseInsensitive(row.topics, topic));
+    const matchedLanguages = options.languages.filter((language) =>
+      includesCaseInsensitive(row.languages, language),
+    );
+    const matchedNeighborhood =
+      options.neighborhoods.find(
+        (neighborhood) => neighborhood.toLowerCase() === (row.neighborhood ?? "").toLowerCase(),
+      ) ?? null;
+    const searchable = [
+      row.name,
+      row.headline,
+      row.bio,
+      row.organization_name,
+      row.neighborhood,
+      ...row.languages,
+      ...row.topics,
+      ...row.skills,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const matchedKeywords = tokens.filter((token) => searchable.includes(token)).slice(0, 5);
+    const score =
+      matchedTopics.length * 8 +
+      matchedLanguages.length * 7 +
+      (matchedNeighborhood ? 9 : 0) +
+      matchedKeywords.length * 2 +
+      (tokens.some((token) => row.name.toLowerCase().includes(token)) ? 3 : 0);
+
+    return {
+      connector: card,
+      matchedTopics,
+      matchedLanguages,
+      matchedNeighborhood,
+      matchedKeywords,
+      score,
+    };
+  });
+
+  const hasIntent =
+    options.topics.length > 0 ||
+    options.languages.length > 0 ||
+    options.neighborhoods.length > 0 ||
+    tokens.length > 0;
+  const matching = hasIntent
+    ? ranked.filter(
+        (result) =>
+          result.score > 0 &&
+          (options.languages.length === 0 || result.matchedLanguages.length > 0) &&
+          (options.neighborhoods.length === 0 || Boolean(result.matchedNeighborhood)) &&
+          (options.topics.length === 0 || result.matchedTopics.length > 0),
+      )
+    : ranked;
+  const limit = Math.min(Math.max(options.limit ?? 8, 1), 12);
+
+  return matching
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.connector.name.localeCompare(right.connector.name),
+    )
+    .slice(0, limit);
 }
 
 export async function getConnectorCardsByIds(ids: string[]) {
@@ -312,6 +560,7 @@ export async function createConnectorProfile(input: CreateConnectorProfileInput)
       .update({
         display_name: input.name,
         email: input.email ?? null,
+        ...(input.avatarUrl ? { avatar_url: input.avatarUrl } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", input.ownerId);
@@ -337,7 +586,7 @@ export async function createConnectorProfile(input: CreateConnectorProfileInput)
   const timestamp = new Date().toISOString();
   const localRecord: LocalConnectorRecord = {
     id: crypto.randomUUID(),
-    owner_id: payload.owner_id ?? null,
+    owner_id: payload.owner_id ?? LOCAL_DEMO_USER_ID,
     kind: payload.kind ?? "person",
     status: "published",
     name: payload.name,
@@ -359,10 +608,88 @@ export async function createConnectorProfile(input: CreateConnectorProfileInput)
     created_at: timestamp,
     updated_at: timestamp,
     avatar_key: input.avatarKey ?? null,
+    avatar_url: input.avatarUrl ?? null,
     friend_signal: "Just joined Detroit Connect",
   };
 
   await writeLocalStore([localRecord, ...localRows]);
 
   return { id: localRecord.id, mode: "local" as const };
+}
+
+export async function updateConnectorProfile(input: UpdateConnectorProfileInput) {
+  const payload = buildConnectorInsert(input);
+  const updates: Partial<ConnectorInsert> & { updated_at: string } = {
+    kind: payload.kind,
+    name: payload.name,
+    headline: payload.headline,
+    bio: payload.bio,
+    organization_name: payload.organization_name,
+    email: payload.email,
+    phone: payload.phone,
+    preferred_contact_method: payload.preferred_contact_method,
+    neighborhood: payload.neighborhood,
+    zip_code: payload.zip_code,
+    years_connected: payload.years_connected,
+    languages: payload.languages,
+    topics: payload.topics,
+    skills: payload.skills,
+    availability: payload.availability,
+    avatar_key: payload.avatar_key,
+    ...(input.avatarUrl ? { avatar_url: input.avatarUrl } : {}),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (isSupabaseConfigured()) {
+    if (!input.ownerId) {
+      throw new Error("Sign in before editing this profile.");
+    }
+
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("connector_profiles")
+      .update(updates)
+      .eq("id", input.id)
+      .eq("owner_id", input.ownerId)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Could not update the connector profile: ${error.message}`);
+    }
+    if (!data) {
+      throw new Error("You can only edit your own profile.");
+    }
+
+    await supabase
+      .from("user_profiles")
+      .update({
+        display_name: input.name,
+        email: input.email ?? null,
+        ...(input.avatarUrl ? { avatar_url: input.avatarUrl } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.ownerId);
+
+    return { id: input.id, mode: "supabase" as const };
+  }
+
+  const rows = await readLocalStore(true);
+  const profileIndex = rows.findIndex((profile) => profile.id === input.id);
+
+  if (profileIndex < 0) {
+    throw new Error("That profile could not be found.");
+  }
+  if (rows[profileIndex].owner_id !== (input.ownerId ?? LOCAL_DEMO_USER_ID)) {
+    throw new Error("You can only edit your own profile.");
+  }
+
+  rows[profileIndex] = {
+    ...rows[profileIndex],
+    ...updates,
+    avatar_url: input.avatarUrl ?? rows[profileIndex].avatar_url ?? null,
+  };
+  await writeLocalStore(rows);
+
+  return { id: input.id, mode: "local" as const };
 }

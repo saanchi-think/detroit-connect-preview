@@ -9,6 +9,8 @@ export type ConnectorCardModel = {
   topics: string[];
   languages: string[];
   friendSignal: string;
+  avatarKey?: AvatarKey | null;
+  avatarUrl?: string | null;
 };
 
 export type AvatarKey = "tire" | "boat" | "car" | "pizza";
@@ -27,6 +29,7 @@ export type ConnectorProfileModel = ConnectorCardModel & {
   availability: string[];
   trustBadges: string[];
   avatarKey: AvatarKey | null;
+  avatarUrl: string | null;
 };
 
 export type CreateConnectorProfileInput = {
@@ -47,4 +50,9 @@ export type CreateConnectorProfileInput = {
   skills: string[];
   availability: string[];
   avatarKey?: AvatarKey;
+  avatarUrl?: string;
+};
+
+export type UpdateConnectorProfileInput = CreateConnectorProfileInput & {
+  id: string;
 };

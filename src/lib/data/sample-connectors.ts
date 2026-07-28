@@ -19,11 +19,11 @@ export const sampleConnectors: ConnectorCardModel[] = [
     neighborhood: "Bagley",
     topics: ["Utilities", "City Services", "Moving"],
     languages: ["English"],
-    friendSignal: "Worked with Marcus",
+    friendSignal: "Recommended in your Detroit circle",
   },
   {
     id: "aisha-king",
-    kind: "vendor",
+    kind: "person",
     name: "Aisha King",
     role: "Small business advisor",
     neighborhood: "New Center",

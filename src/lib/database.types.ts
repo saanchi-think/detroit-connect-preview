@@ -18,10 +18,105 @@ export type Database = {
   }
   public: {
     Tables: {
+      knowledge_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          embedding: unknown | null
+          heading: string | null
+          id: string
+          metadata: Json
+          source_id: string
+          token_count: number | null
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string
+          embedding?: unknown | null
+          heading?: string | null
+          id?: string
+          metadata?: Json
+          source_id: string
+          token_count?: number | null
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          embedding?: unknown | null
+          heading?: string | null
+          id?: string
+          metadata?: Json
+          source_id?: string
+          token_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_chunks_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_sources: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          last_indexed_at: string | null
+          metadata: Json
+          source_url: string | null
+          status: string
+          storage_path: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          last_indexed_at?: string | null
+          metadata?: Json
+          source_url?: string | null
+          status?: string
+          storage_path?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          last_indexed_at?: string | null
+          metadata?: Json
+          source_url?: string | null
+          status?: string
+          storage_path?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_sources_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connector_profiles: {
         Row: {
           availability: string[]
           avatar_key: string | null
+          avatar_url: string | null
           bio: string | null
           created_at: string
           email: string | null
@@ -48,6 +143,7 @@ export type Database = {
         Insert: {
           availability?: string[]
           avatar_key?: string | null
+          avatar_url?: string | null
           bio?: string | null
           created_at?: string
           email?: string | null
@@ -74,6 +170,7 @@ export type Database = {
         Update: {
           availability?: string[]
           avatar_key?: string | null
+          avatar_url?: string | null
           bio?: string | null
           created_at?: string
           email?: string | null
@@ -146,21 +243,27 @@ export type Database = {
           body: string
           created_at: string
           id: string
+          parent_comment_id: string | null
           post_id: string
+          updated_at: string
         }
         Insert: {
           author_id?: string | null
           body: string
           created_at?: string
           id?: string
+          parent_comment_id?: string | null
           post_id: string
+          updated_at?: string
         }
         Update: {
           author_id?: string | null
           body?: string
           created_at?: string
           id?: string
+          parent_comment_id?: string | null
           post_id?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -177,6 +280,13 @@ export type Database = {
             referencedRelation: "forum_posts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "forum_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "forum_comments"
+            referencedColumns: ["id"]
+          },
         ]
       }
       forum_posts: {
@@ -185,6 +295,7 @@ export type Database = {
           body: string
           created_at: string
           id: string
+          image_urls: string[]
           title: string
           topic: string
           updated_at: string
@@ -194,6 +305,7 @@ export type Database = {
           body: string
           created_at?: string
           id?: string
+          image_urls?: string[]
           title: string
           topic: string
           updated_at?: string
@@ -203,6 +315,7 @@ export type Database = {
           body?: string
           created_at?: string
           id?: string
+          image_urls?: string[]
           title?: string
           topic?: string
           updated_at?: string
@@ -211,6 +324,123 @@ export type Database = {
           {
             foreignKeyName: "forum_posts_author_id_fkey"
             columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forum_post_likes: {
+        Row: {
+          created_at: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forum_post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "forum_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "forum_post_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      direct_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          member_one_id: string
+          member_two_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          member_one_id: string
+          member_two_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          member_one_id?: string
+          member_two_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "direct_conversations_member_one_id_fkey"
+            columns: ["member_one_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_conversations_member_two_id_fkey"
+            columns: ["member_two_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      direct_messages: {
+        Row: {
+          body: string
+          conversation_id: string
+          created_at: string
+          delivered_at: string
+          id: string
+          read_at: string | null
+          sender_id: string
+        }
+        Insert: {
+          body: string
+          conversation_id: string
+          created_at?: string
+          delivered_at?: string
+          id?: string
+          read_at?: string | null
+          sender_id: string
+        }
+        Update: {
+          body?: string
+          conversation_id?: string
+          created_at?: string
+          delivered_at?: string
+          id?: string
+          read_at?: string | null
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "direct_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_messages_sender_id_fkey"
+            columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "user_profiles"
             referencedColumns: ["id"]
@@ -295,6 +525,41 @@ export type Database = {
           },
         ]
       }
+      user_settings: {
+        Row: {
+          connection_requests: boolean
+          direct_messages: boolean
+          forum_replies: boolean
+          recommendations: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          connection_requests?: boolean
+          direct_messages?: boolean
+          forum_replies?: boolean
+          recommendations?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          connection_requests?: boolean
+          direct_messages?: boolean
+          forum_replies?: boolean
+          recommendations?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_settings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       public_member_profiles: {
         Row: {
           avatar_url: string | null
@@ -361,6 +626,36 @@ export type Database = {
         Returns: {
           display_name: string
           member_id: string
+        }[]
+      }
+      get_profile_social_context: {
+        Args: { target_connector_profile_id: string }
+        Returns: Json
+      }
+      start_direct_conversation: {
+        Args: { other_member_id: string }
+        Returns: string
+      }
+      mark_direct_conversation_read: {
+        Args: { target_conversation_id: string }
+        Returns: undefined
+      }
+      match_knowledge_chunks: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          chunk_id: string
+          content: string
+          heading: string | null
+          similarity: number
+          source_id: string
+          source_kind: string
+          source_title: string
+          source_url: string | null
+          storage_path: string | null
         }[]
       }
     }

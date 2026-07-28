@@ -20,6 +20,19 @@ Open [http://localhost:5200](http://localhost:5200).
 
 Without Supabase environment variables, the app runs in demo mode. Demo mode is useful for interface work but is not a multi-user backend.
 
+## Synthetic test directory
+
+Create 1,000 deterministic, clearly synthetic connector profiles for local UI work:
+
+```bash
+npm run seed:demo
+DETROIT_CONNECT_DATA_MODE=local DETROIT_CONNECT_DATA_DIR=.demo-data npm run dev -- -p 5201
+```
+
+This uses `example.test` contact details only and does not modify Supabase or the normal `data/` directory.
+
+For a staging Supabase project, use `supabase/seed/1000_synthetic_connector_profiles.sql`. It is idempotent and does not create auth users. Never run it in production. The paired removal script only deletes profiles marked as synthetic.
+
 ## Connect Supabase
 
 1. Create a Supabase project.
@@ -69,6 +82,16 @@ When Supabase is not configured, local JSON files keep the visual prototype usab
 ```bash
 npm run check
 ```
+
+Run the isolated interaction suite with:
+
+```bash
+npm run test:e2e
+```
+
+The test suite starts its own local app on port 5202, forces local data mode, creates a fresh `.test-data` directory, and checks the implemented directory, profile, favorites, recommendation, friend, forum, share, map, home search, and profile-creation workflows.
+
+`Like` and direct-message interactions are not yet product features, so they are intentionally listed as gaps rather than treated as passing tests. Google OAuth is tested manually with two real staging accounts because it redirects through Google.
 
 Before client delivery, test with two real accounts in separate browser sessions:
 

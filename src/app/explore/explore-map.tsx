@@ -286,11 +286,21 @@ function categoryMatches(place: Place, filter: string) {
   return filter === "all" || place.category === filter || (filter === "neighborhood" && isNeighborhoodMarker(place.id));
 }
 
+function zoomStatusFor(zoom: number) {
+  return zoom >= 15 ? "Street detail" : zoom >= 13 ? "District detail" : "City view";
+}
+
 export function ExploreMap() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [activePlaceId, setActivePlaceId] = useState(initialPlaceId);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
+  const [mapReady, setMapReady] = useState(false);
   const [zoomStatus, setZoomStatus] = useState("City view");
+  const [zoomLevel, setZoomLevel] = useState(13);
+  const searchRef = useRef<HTMLFormElement | null>(null);
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<typeof Leaflet | null>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
@@ -298,6 +308,20 @@ export function ExploreMap() {
   const markersRef = useRef<Record<string, Leaflet.Marker>>({});
 
   const visiblePlaces = useMemo(() => places.filter((place) => categoryMatches(place, activeFilter)), [activeFilter]);
+  const searchSuggestions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) return [];
+
+    return places
+      .filter((place) =>
+        [place.name, place.note, place.section, place.type, place.category]
+          .join(" ")
+          .toLowerCase()
+          .includes(query),
+      )
+      .slice(0, 6);
+  }, [searchQuery]);
   const activePlace = placeById[activePlaceId] ?? places[0];
   const visibleSections = [...new Set(visiblePlaces.map((place) => place.section))];
 
@@ -364,8 +388,9 @@ export function ExploreMap() {
       });
 
       const updateZoomStatus = () => {
-        const zoom = map.getZoom();
-        setZoomStatus(zoom >= 15 ? "Street detail" : zoom >= 13 ? "District detail" : "City view");
+        const nextZoom = map.getZoom();
+        setZoomLevel(nextZoom);
+        setZoomStatus(zoomStatusFor(nextZoom));
       };
 
       map.on("zoomend", updateZoomStatus);
@@ -373,6 +398,7 @@ export function ExploreMap() {
 
       mapRef.current = map;
       markerLayerRef.current = markerLayer;
+      setMapReady(true);
     }
 
     initMap();
@@ -408,23 +434,137 @@ export function ExploreMap() {
         markerLayerRef.current!.removeLayer(marker);
       }
     });
-  }, [activeFilter, activePlaceId]);
+  }, [activeFilter, activePlaceId, mapReady]);
 
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.flyTo(activePlace.coords, activePlace.zoom, { duration: 0.7 });
   }, [activePlace]);
 
+  useEffect(() => {
+    function closeSearch(event: PointerEvent) {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setSearchOpen(false);
+        setActiveSearchIndex(-1);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeSearch);
+    return () => document.removeEventListener("pointerdown", closeSearch);
+  }, []);
+
+  function changeZoom(delta: 1 | -1) {
+    const map = mapRef.current;
+
+    if (!map) return;
+
+    const nextZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), map.getZoom() + delta));
+    map.setZoom(nextZoom, { animate: false });
+    setZoomLevel(nextZoom);
+    setZoomStatus(zoomStatusFor(nextZoom));
+  }
+
+  function selectSearchPlace(place: Place) {
+    setActiveFilter(place.category);
+    setActivePlaceId(place.id);
+    setSearchQuery(place.name);
+    setSearchOpen(false);
+    setActiveSearchIndex(-1);
+    setFilterOpen(false);
+  }
+
   return (
     <section className="explore-hero" aria-labelledby="explore-title">
       <div className="copy-panel">
-        <div className="map-search">
+        <form
+          aria-label="Search Detroit places"
+          className="map-search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const match = searchSuggestions[activeSearchIndex] ?? searchSuggestions[0];
+            if (match) selectSearchPlace(match);
+          }}
+          ref={searchRef}
+          role="search"
+        >
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <circle cx="11" cy="11" r="6" />
             <path d="M16 16l4 4" />
           </svg>
-          <input type="search" placeholder="Search places, districts, food..." />
-        </div>
+          <input
+            aria-activedescendant={
+              activeSearchIndex >= 0 && searchSuggestions[activeSearchIndex]
+                ? `map-search-${searchSuggestions[activeSearchIndex].id}`
+                : undefined
+            }
+            aria-autocomplete="list"
+            aria-controls="map-search-suggestions"
+            aria-expanded={searchOpen}
+            aria-label="Search Detroit places"
+            autoComplete="off"
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              setSearchOpen(Boolean(event.target.value.trim()));
+              setActiveSearchIndex(-1);
+            }}
+            onFocus={() => {
+              if (searchQuery.trim()) setSearchOpen(true);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setSearchOpen(false);
+                setActiveSearchIndex(-1);
+                return;
+              }
+
+              if (event.key === "ArrowDown" && searchSuggestions.length > 0) {
+                event.preventDefault();
+                setSearchOpen(true);
+                setActiveSearchIndex((current) => (current + 1) % searchSuggestions.length);
+                return;
+              }
+
+              if (event.key === "ArrowUp" && searchSuggestions.length > 0) {
+                event.preventDefault();
+                setSearchOpen(true);
+                setActiveSearchIndex((current) =>
+                  current <= 0 ? searchSuggestions.length - 1 : current - 1,
+                );
+              }
+            }}
+            placeholder="Search Detroit places..."
+            role="combobox"
+            type="search"
+            value={searchQuery}
+          />
+          {searchOpen ? (
+            <div className="map-search-suggestions" id="map-search-suggestions" role="listbox">
+              {searchSuggestions.length > 0 ? (
+                searchSuggestions.map((place, index) => (
+                  <button
+                    aria-selected={activeSearchIndex === index}
+                    className={activeSearchIndex === index ? "is-active" : ""}
+                    id={`map-search-${place.id}`}
+                    key={place.id}
+                    onClick={() => selectSearchPlace(place)}
+                    onPointerMove={() => setActiveSearchIndex(index)}
+                    role="option"
+                    type="button"
+                  >
+                    <span className={`map-search-thumb ${place.thumb}`} aria-hidden="true" />
+                    <span>
+                      <strong>{place.name}</strong>
+                      <small>{place.note}</small>
+                    </span>
+                    <em>{place.section}</em>
+                  </button>
+                ))
+              ) : (
+                <p>No Detroit places found</p>
+              )}
+            </div>
+          ) : null}
+        </form>
         <button
           className="filter-launch"
           type="button"
@@ -500,19 +640,17 @@ export function ExploreMap() {
           <i className="walker walker-three" />
         </div>
         <div className="map-controls" aria-label="Map controls">
-          <button type="button" aria-label="Zoom out" onClick={() => mapRef.current?.zoomOut()}>
+          <button type="button" aria-label="Zoom out" onClick={() => changeZoom(-1)}>
             -
           </button>
-          <button type="button" aria-label="Zoom in" onClick={() => mapRef.current?.zoomIn()}>
+          <button type="button" aria-label="Zoom in" onClick={() => changeZoom(1)}>
             +
           </button>
         </div>
         <div className="zoom-status" aria-live="polite">
           {zoomStatus}
+          <span className="sr-only">, zoom level {zoomLevel}</span>
         </div>
-        <button className="map-close" type="button" aria-label="Close map">
-          ×
-        </button>
       </section>
 
       <aside className="place-card" aria-live="polite">

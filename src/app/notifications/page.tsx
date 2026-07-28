@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { BellRing } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { getCurrentUser } from "@/lib/auth/user";
 import { getNotifications } from "@/lib/notifications/repository";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+
+export const dynamic = "force-dynamic";
 
 function formatNotificationTime(createdAt: string) {
   const date = new Date(createdAt);
@@ -60,7 +63,9 @@ export default async function NotificationsPage() {
         </section>
       ) : (
         <section className="empty-panel notification-empty">
-          <p>No new activity yet.</p>
+          <BellRing aria-hidden="true" size={24} />
+          <span>You&apos;re all caught up</span>
+          <p>Network activity, recommendations, replies, and messages will appear here.</p>
         </section>
       )}
     </main>

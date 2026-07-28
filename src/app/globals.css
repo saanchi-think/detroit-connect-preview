@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Rajdhani:wght@600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Rajdhani:wght@600;700&display=swap");
 
 :root {
   --paper: #fffaf3;
@@ -2084,6 +2084,7 @@ select {
 .filter-launch {
   display: grid;
   position: absolute;
+  z-index: 9;
   top: 98px;
   right: 22px;
   width: 48px;

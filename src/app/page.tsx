@@ -1,7 +1,8 @@
-import { ChevronRight, Sparkles } from "lucide-react";
+import { ChevronRight, Search, Sparkles } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
+import { ConnectorSearchInput } from "@/components/connector-search-input";
 
 export default function Home() {
   return (
@@ -16,19 +17,14 @@ export default function Home() {
             <span>Connect</span>
           </h1>
           <p>Find trusted people and local services for moving to and living in Detroit.</p>
-          <form className="ai-search" action="/connectors" aria-label="AI search helper profiles">
-            <label>
-              <span>Ask Detroit Connect</span>
-              <input
-                aria-label="Search Detroit Connect"
-                name="q"
-                type="search"
-                placeholder="What do you need help with?"
-              />
-            </label>
-            <button type="submit">
-              <Sparkles aria-hidden="true" size={19} />
-              <span>Search</span>
+          <form className="ai-search" action="/search" aria-label="AI search Detroit Connect">
+            <ConnectorSearchInput
+              ariaLabel="Search Detroit Connect"
+              placeholder="What do you need help with?"
+            />
+            <button aria-label="Search" title="Search with AI" type="submit">
+              <Search aria-hidden="true" className="ai-search-icon" size={22} />
+              <Sparkles aria-hidden="true" className="ai-search-sparkle" size={13} />
             </button>
           </form>
           <Link className="browse-link" href="/connectors">

@@ -47,7 +47,7 @@ values
   (
     '11111111-1111-4111-8111-000000000003',
     null,
-    'vendor',
+    'organization',
     'published',
     'Aisha King',
     'Small business advisor',

@@ -1,9 +1,18 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile } from "node:fs/promises";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
-import { getConnectorCardsByIds } from "@/lib/connectors/repository";
-import type { ConnectorCardModel } from "@/lib/connectors/types";
+import {
+  getConnectorCardsByIds,
+  getConnectorProfileById,
+  searchConnectorCards,
+  searchConnectorProfiles,
+} from "@/lib/connectors/repository";
+import type { ConnectorCardModel, ConnectorProfileModel } from "@/lib/connectors/types";
 import type { Database, FriendStatus } from "@/lib/database.types";
+import { getLocalDataPath, writeLocalJson } from "@/lib/local-data";
+import {
+  getLocalConnectorProfileId,
+  getLocalProfileHref,
+} from "@/lib/members/local-member-profiles";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,17 +22,21 @@ type FriendModel = {
   name: string;
   detail: string;
   email: string | null;
+  profileHref: string;
   status: FriendStatus;
   direction: FriendDirection;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type FriendDirection = "connected" | "incoming" | "outgoing";
-type FriendRequestOperation = "accept" | "decline" | "cancel";
+type FriendRequestOperation = "accept" | "decline" | "cancel" | "remove";
 
 type FriendRecommendationModel = {
   id: string;
   recommenderName: string;
   recommenderInitials: string;
+  recommenderProfileHref: string;
   connector: ConnectorCardModel;
   note: string;
   createdAt: string;
@@ -34,6 +47,46 @@ type FriendsDashboard = {
   incomingRequests: FriendModel[];
   outgoingRequests: FriendModel[];
   recommendations: FriendRecommendationModel[];
+};
+
+type FriendSearchCandidate = {
+  id: string;
+  initials: string;
+  name: string;
+  role: string;
+  neighborhood: string;
+  profileHref: string;
+  relationship: FriendDirection | "none";
+  canRequest: boolean;
+};
+
+type ProfileRelationshipStatus =
+  | "self"
+  | "friends"
+  | "incoming"
+  | "outgoing"
+  | "none"
+  | "unavailable";
+
+type ProfileSocialPerson = {
+  id: string;
+  name: string;
+  role: string;
+  neighborhood: string;
+  profileHref: string;
+  avatarKey: ConnectorCardModel["avatarKey"];
+  avatarUrl: ConnectorCardModel["avatarUrl"];
+  note: string | null;
+  isMutualFriend: boolean;
+};
+
+type ProfileSocialContext = {
+  relationship: ProfileRelationshipStatus;
+  relationshipId: string | null;
+  friends: ProfileSocialPerson[];
+  recommendedBy: ProfileSocialPerson[];
+  recommendations: ConnectorCardModel[];
+  mutualFriendCount: number;
 };
 
 type LocalFriendRecord = {
@@ -72,8 +125,8 @@ type SupabaseRecommendationRow = Pick<
   "id" | "recommender_id" | "connector_profile_id" | "note" | "created_at"
 >;
 
-const LOCAL_FRIENDS_PATH = path.join(process.cwd(), "data", "local-dev-friends.json");
-const LOCAL_RECOMMENDATIONS_PATH = path.join(process.cwd(), "data", "local-dev-recommendations.json");
+const LOCAL_FRIENDS_PATH = getLocalDataPath("local-dev-friends.json");
+const LOCAL_RECOMMENDATIONS_PATH = getLocalDataPath("local-dev-recommendations.json");
 const LOCAL_DEV_USER_ID = "local-dev-user";
 
 const defaultFriends: LocalFriendRecord[] = [
@@ -147,8 +200,8 @@ const defaultRecommendations: LocalRecommendationRecord[] = [
   },
 ];
 
-function friendsUserId(user?: User | null) {
-  return user?.id ?? LOCAL_DEV_USER_ID;
+function friendsUserId() {
+  return LOCAL_DEV_USER_ID;
 }
 
 function getInitials(name: string) {
@@ -186,9 +239,63 @@ function localFriendToModel(friend: LocalFriendRecord): FriendModel {
     name: friend.display_name,
     detail: friend.detail,
     email: friend.email,
+    profileHref: getLocalProfileHref(friend.id, friend.display_name) ?? `/members/${encodeURIComponent(friend.id)}`,
     status: friend.status,
     direction: friend.status === "accepted" ? "connected" : (friend.direction ?? "outgoing"),
+    createdAt: friend.created_at,
+    updatedAt: friend.updated_at,
   };
+}
+
+function emptyProfileSocialContext(
+  relationship: ProfileRelationshipStatus = "unavailable",
+): ProfileSocialContext {
+  return {
+    relationship,
+    relationshipId: null,
+    friends: [],
+    recommendedBy: [],
+    recommendations: [],
+    mutualFriendCount: 0,
+  };
+}
+
+function cardToSocialPerson(
+  connector: ConnectorCardModel,
+  options: { note?: string | null; isMutualFriend?: boolean } = {},
+): ProfileSocialPerson {
+  return {
+    id: connector.id,
+    name: connector.name,
+    role: connector.role,
+    neighborhood: connector.neighborhood,
+    profileHref: `/connectors/${connector.id}`,
+    avatarKey: connector.avatarKey,
+    avatarUrl: connector.avatarUrl,
+    note: options.note ?? null,
+    isMutualFriend: options.isMutualFriend ?? false,
+  };
+}
+
+function deterministicStart(value: string, size: number) {
+  if (size === 0) return 0;
+  return Array.from(value).reduce((total, character) => total + character.charCodeAt(0), 0) % size;
+}
+
+function rotatedProfiles(
+  profiles: ConnectorCardModel[],
+  currentProfileId: string,
+  count: number,
+  offset: number,
+) {
+  const candidates = profiles.filter((profile) => profile.id !== currentProfileId);
+
+  if (candidates.length === 0) return [];
+
+  const start = (deterministicStart(currentProfileId, candidates.length) + offset) % candidates.length;
+  return Array.from({ length: Math.min(count, candidates.length) }, (_, index) =>
+    candidates[(start + index) % candidates.length],
+  );
 }
 
 async function readJsonFile<T>(filePath: string, fallback: T) {
@@ -206,8 +313,7 @@ async function readJsonFile<T>(filePath: string, fallback: T) {
 }
 
 async function writeJsonFile<T>(filePath: string, records: T) {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(records, null, 2)}\n`, "utf8");
+  await writeLocalJson(filePath, records);
 }
 
 async function readLocalFriends() {
@@ -226,14 +332,23 @@ async function writeLocalRecommendations(records: LocalRecommendationRecord[]) {
   await writeJsonFile(LOCAL_RECOMMENDATIONS_PATH, records);
 }
 
-async function getLocalDashboard(user?: User | null): Promise<FriendsDashboard> {
-  const userId = friendsUserId(user);
+async function getLocalDashboard(): Promise<FriendsDashboard> {
+  const userId = friendsUserId();
   const relationships = (await readLocalFriends())
     .filter((friend) => friend.user_id === userId)
     .sort((left, right) => right.updated_at.localeCompare(left.updated_at))
     .map(localFriendToModel);
+  const acceptedFriendNames = new Set(
+    relationships
+      .filter((friend) => friend.direction === "connected")
+      .map((friend) => friend.name),
+  );
   const recommendationRecords = (await readLocalRecommendations())
-    .filter((recommendation) => recommendation.user_id === userId)
+    .filter(
+      (recommendation) =>
+        recommendation.user_id === userId &&
+        acceptedFriendNames.has(recommendation.recommender_name),
+    )
     .sort((left, right) => right.created_at.localeCompare(left.created_at));
   const connectors = await getConnectorCardsByIds(
     recommendationRecords.map((recommendation) => recommendation.connector_profile_id),
@@ -255,6 +370,8 @@ async function getLocalDashboard(user?: User | null): Promise<FriendsDashboard> 
         id: recommendation.id,
         recommenderName: recommendation.recommender_name,
         recommenderInitials: getInitials(recommendation.recommender_name),
+        recommenderProfileHref:
+          getLocalProfileHref(null, recommendation.recommender_name) ?? "/network",
         connector,
         note: recommendation.note,
         createdAt: recommendation.created_at,
@@ -287,6 +404,30 @@ async function getUserProfilesById(ids: string[], userClient?: SupabaseClient) {
   return new Map(profiles.map((profile) => [profile.id, profile]));
 }
 
+async function getConnectorProfileIdsByOwner(ids: string[], userClient?: SupabaseClient) {
+  const uniqueIds = Array.from(new Set(ids));
+
+  if (uniqueIds.length === 0 || !userClient) {
+    return new Map<string, string>();
+  }
+
+  const { data, error } = await userClient
+    .from("connector_profiles")
+    .select("id, owner_id")
+    .in("owner_id", uniqueIds)
+    .eq("status", "published");
+
+  if (error) {
+    throw new Error(`Could not load member connector profiles: ${error.message}`);
+  }
+
+  return new Map(
+    (data ?? []).flatMap((profile) =>
+      profile.owner_id ? [[profile.owner_id, profile.id] as const] : [],
+    ),
+  );
+}
+
 async function getSupabaseDashboard(user?: User | null): Promise<FriendsDashboard | null> {
   if (!isSupabaseConfigured() || !user) {
     return null;
@@ -308,7 +449,10 @@ async function getSupabaseDashboard(user?: User | null): Promise<FriendsDashboar
     const friendIds = friendshipRows.map((friendship) =>
       friendship.requester_id === user.id ? friendship.addressee_id : friendship.requester_id,
     );
-    const profileMap = await getUserProfilesById(friendIds, supabase);
+    const [profileMap, connectorProfileIdsByOwner] = await Promise.all([
+      getUserProfilesById(friendIds, supabase),
+      getConnectorProfileIdsByOwner(friendIds, supabase),
+    ]);
     const relationships = friendshipRows.flatMap((friendship) => {
       const friendId = friendship.requester_id === user.id ? friendship.addressee_id : friendship.requester_id;
       const profile = profileMap.get(friendId);
@@ -331,8 +475,13 @@ async function getSupabaseDashboard(user?: User | null): Promise<FriendsDashboar
         name,
         detail: friendship.status === "accepted" ? "Connected friend" : "Pending connection",
         email: profile?.email ?? null,
+        profileHref: connectorProfileIdsByOwner.get(friendId)
+          ? `/connectors/${connectorProfileIdsByOwner.get(friendId)}`
+          : `/members/${friendId}`,
         status: friendship.status,
         direction,
+        createdAt: friendship.created_at,
+        updatedAt: friendship.updated_at,
       };
     });
     const friends = relationships.filter((friend) => friend.direction === "connected");
@@ -380,6 +529,9 @@ async function getSupabaseDashboard(user?: User | null): Promise<FriendsDashboar
           id: recommendation.id,
           recommenderName,
           recommenderInitials: getInitials(recommenderName),
+          recommenderProfileHref: connectorProfileIdsByOwner.get(recommendation.recommender_id)
+            ? `/connectors/${connectorProfileIdsByOwner.get(recommendation.recommender_id)}`
+            : `/members/${recommendation.recommender_id}`,
           connector,
           note: recommendation.note ?? "Recommended by someone in your Detroit Connect circle.",
           createdAt: recommendation.created_at,
@@ -417,20 +569,20 @@ async function addSupabaseFriend(friendQuery: string, user?: User | null) {
   });
 
   if (friendshipError && friendshipError.code !== "23505") {
-    throw new Error(`Could not send the friend request: ${friendshipError.message}`);
+      throw new Error(`Could not send the connection request: ${friendshipError.message}`);
   }
 
   return { mode: "supabase" as const, friendId: friend.member_id };
 }
 
-async function addLocalFriend(friendQuery: string, user?: User | null) {
+async function addLocalFriend(friendQuery: string) {
   const normalizedQuery = normalizeFriendQuery(friendQuery);
 
   if (!normalizedQuery) {
     return { mode: "local" as const, friendId: null };
   }
 
-  const userId = friendsUserId(user);
+  const userId = friendsUserId();
   const friends = await readLocalFriends();
   const normalizedLower = normalizedQuery.toLowerCase();
   const existing = friends.find((friend) => {
@@ -475,7 +627,308 @@ export async function getFriendsDashboard(user?: User | null) {
     return dashboard ?? { friends: [], incomingRequests: [], outgoingRequests: [], recommendations: [] };
   }
 
-  return getLocalDashboard(user);
+  return getLocalDashboard();
+}
+
+async function getLocalProfileSocialContext(
+  profile: ConnectorProfileModel,
+): Promise<ProfileSocialContext> {
+  if (profile.kind !== "person") {
+    return emptyProfileSocialContext();
+  }
+
+  const dashboard = await getLocalDashboard();
+  const relationships = [
+    ...dashboard.friends,
+    ...dashboard.incomingRequests,
+    ...dashboard.outgoingRequests,
+  ];
+  const relationship = relationships.find(
+    (friend) =>
+      friend.name.toLowerCase() === profile.name.toLowerCase() ||
+      (profile.email ? friend.email?.toLowerCase() === profile.email.toLowerCase() : false),
+  );
+  const relationshipStatus: ProfileRelationshipStatus =
+    profile.ownerId === LOCAL_DEV_USER_ID
+      ? "self"
+      : relationship?.direction === "connected"
+        ? "friends"
+        : relationship?.direction === "incoming"
+          ? "incoming"
+          : relationship?.direction === "outgoing"
+            ? "outgoing"
+            : "none";
+
+  const [personProfiles, recommendableProfiles] = await Promise.all([
+    searchConnectorCards({ type: "person", pageSize: 24 }),
+    searchConnectorCards({ pageSize: 24 }),
+  ]);
+  const knownFriendIds = dashboard.friends.flatMap((friend) => {
+    const connectorProfileId = getLocalConnectorProfileId(friend.id, friend.name);
+    return connectorProfileId ? [connectorProfileId] : [];
+  });
+  const knownFriendCards = await getConnectorCardsByIds(knownFriendIds);
+  const generatedFriends = rotatedProfiles(personProfiles, profile.id, 6, 0);
+  const friendCards = Array.from(
+    new Map(
+      [...knownFriendCards.slice(0, 2), ...generatedFriends]
+        .filter((friend) => friend.id !== profile.id)
+        .map((friend) => [friend.id, friend]),
+    ).values(),
+  ).slice(0, 6);
+  const viewerFriendNames = new Set(dashboard.friends.map((friend) => friend.name.toLowerCase()));
+  const friends = friendCards.map((friend) =>
+    cardToSocialPerson(friend, {
+      isMutualFriend: viewerFriendNames.has(friend.name.toLowerCase()),
+    }),
+  );
+
+  const recommendationRecords = (await readLocalRecommendations())
+    .filter((recommendation) => recommendation.connector_profile_id === profile.id)
+    .sort((left, right) => right.created_at.localeCompare(left.created_at));
+  const recommenderProfileIds = recommendationRecords.flatMap((recommendation) => {
+    const connectorProfileId = getLocalConnectorProfileId(null, recommendation.recommender_name);
+    return connectorProfileId ? [connectorProfileId] : [];
+  });
+  const recommenderCards = await getConnectorCardsByIds(recommenderProfileIds);
+  const recommenderCardsByName = new Map(
+    recommenderCards.map((connector) => [connector.name.toLowerCase(), connector]),
+  );
+  const recordedRecommenders = recommendationRecords.map((recommendation) => {
+    const recommender = recommenderCardsByName.get(recommendation.recommender_name.toLowerCase());
+
+    if (recommender) {
+      return cardToSocialPerson(recommender, {
+        note: recommendation.note,
+        isMutualFriend: viewerFriendNames.has(recommender.name.toLowerCase()),
+      });
+    }
+
+    return {
+      id: recommendation.id,
+      name: recommendation.recommender_name,
+      role: recommendation.recommender_name === "You" ? "Your profile" : "Detroit Connect member",
+      neighborhood: "Detroit",
+      profileHref: recommendation.recommender_name === "You" ? "/profile" : "/network",
+      avatarKey: null,
+      avatarUrl: null,
+      note: recommendation.note,
+      isMutualFriend: recommendation.recommender_name === "You",
+    };
+  });
+  const recommendedBy =
+    recordedRecommenders.length > 0
+      ? recordedRecommenders
+      : friends.slice(0, 2).map((friend) => ({
+          ...friend,
+          note: `Recommended ${profile.name} to their Detroit Connect circle.`,
+        }));
+  const recommendations = rotatedProfiles(recommendableProfiles, profile.id, 4, 8);
+
+  return {
+    relationship: relationshipStatus,
+    relationshipId: relationship?.id ?? null,
+    friends,
+    recommendedBy,
+    recommendations,
+    mutualFriendCount: friends.filter((friend) => friend.isMutualFriend).length,
+  };
+}
+
+type SupabaseSocialPersonPayload = {
+  connector_profile_id?: string | null;
+  member_id?: string | null;
+  name?: string | null;
+  role?: string | null;
+  neighborhood?: string | null;
+  avatar_key?: ConnectorCardModel["avatarKey"];
+  avatar_url?: string | null;
+  note?: string | null;
+  is_mutual_friend?: boolean | null;
+};
+
+type SupabaseSocialContextPayload = {
+  relationship?: ProfileRelationshipStatus;
+  relationship_id?: string | null;
+  friends?: SupabaseSocialPersonPayload[];
+  recommended_by?: SupabaseSocialPersonPayload[];
+  recommendations?: SupabaseSocialPersonPayload[];
+};
+
+function payloadToSocialPerson(person: SupabaseSocialPersonPayload): ProfileSocialPerson {
+  const profileId = person.connector_profile_id ?? null;
+  const memberId = person.member_id ?? person.name ?? crypto.randomUUID();
+
+  return {
+    id: profileId ?? memberId,
+    name: person.name ?? "Detroit Connect member",
+    role: person.role ?? "Detroit connector",
+    neighborhood: person.neighborhood ?? "Detroit",
+    profileHref: profileId ? `/connectors/${profileId}` : `/members/${encodeURIComponent(memberId)}`,
+    avatarKey: person.avatar_key ?? null,
+    avatarUrl: person.avatar_url ?? null,
+    note: person.note ?? null,
+    isMutualFriend: person.is_mutual_friend ?? false,
+  };
+}
+
+function payloadToConnectorCard(person: SupabaseSocialPersonPayload): ConnectorCardModel | null {
+  if (!person.connector_profile_id) return null;
+
+  return {
+    id: person.connector_profile_id,
+    kind: "person",
+    name: person.name ?? "Detroit connector",
+    role: person.role ?? "Detroit connector",
+    neighborhood: person.neighborhood ?? "Detroit",
+    topics: [],
+    languages: [],
+    friendSignal: "Recommended by this connector",
+    avatarKey: person.avatar_key ?? null,
+    avatarUrl: person.avatar_url ?? null,
+  };
+}
+
+async function getSupabaseProfileSocialContext(
+  profile: ConnectorProfileModel,
+  user?: User | null,
+): Promise<ProfileSocialContext> {
+  if (profile.kind !== "person") {
+    return emptyProfileSocialContext();
+  }
+
+  if (!user) {
+    return emptyProfileSocialContext("none");
+  }
+
+  const supabase = (await createClient()) as SupabaseClient<Database>;
+  const { data, error } = await supabase.rpc("get_profile_social_context", {
+    target_connector_profile_id: profile.id,
+  });
+
+  if (error) {
+    throw new Error(`Could not load this profile's connections: ${error.message}`);
+  }
+
+  const payload = (data ?? {}) as SupabaseSocialContextPayload;
+  const friends = (payload.friends ?? []).map(payloadToSocialPerson);
+
+  return {
+    relationship: payload.relationship ?? "none",
+    relationshipId: payload.relationship_id ?? null,
+    friends,
+    recommendedBy: (payload.recommended_by ?? []).map(payloadToSocialPerson),
+    recommendations: (payload.recommendations ?? []).flatMap((item) => {
+      const connector = payloadToConnectorCard(item);
+      return connector ? [connector] : [];
+    }),
+    mutualFriendCount: friends.filter((friend) => friend.isMutualFriend).length,
+  };
+}
+
+export async function getProfileSocialContext(
+  profile: ConnectorProfileModel,
+  user?: User | null,
+) {
+  return isSupabaseConfigured()
+    ? getSupabaseProfileSocialContext(profile, user)
+    : getLocalProfileSocialContext(profile);
+}
+
+export async function getFriendById(friendId: string, user?: User | null) {
+  const dashboard = await getFriendsDashboard(user);
+  return dashboard.friends.find((friend) => friend.id === friendId) ?? null;
+}
+
+export async function searchFriendCandidates(
+  friendQuery: string,
+  user?: User | null,
+): Promise<FriendSearchCandidate[]> {
+  const normalizedQuery = normalizeFriendQuery(friendQuery);
+
+  if (normalizedQuery.length < 2) {
+    return [];
+  }
+
+  const [profiles, dashboard] = await Promise.all([
+    searchConnectorProfiles({ query: normalizedQuery, type: "person", pageSize: 8 }),
+    getFriendsDashboard(user),
+  ]);
+  const relationships = [
+    ...dashboard.friends,
+    ...dashboard.incomingRequests,
+    ...dashboard.outgoingRequests,
+  ];
+  const queryLower = normalizedQuery.toLowerCase();
+
+  return profiles
+    .flatMap((profile) => {
+      if (!profile || profile.kind !== "person" || (user && profile.ownerId === user.id)) {
+        return [];
+      }
+
+      const relationship = relationships.find(
+        (friend) =>
+          (profile.ownerId ? friend.id === profile.ownerId : false) ||
+          friend.name.toLowerCase() === profile.name.toLowerCase() ||
+          (profile.email ? friend.email?.toLowerCase() === profile.email.toLowerCase() : false),
+      );
+
+      const candidate: FriendSearchCandidate = {
+        id: profile.id,
+        initials: getInitials(profile.name),
+        name: profile.name,
+        role: profile.role,
+        neighborhood: profile.neighborhood,
+        profileHref: `/connectors/${profile.id}`,
+        relationship: relationship?.direction ?? "none",
+        canRequest: !isSupabaseConfigured() || Boolean(profile.ownerId),
+      };
+
+      return [candidate];
+    })
+    .sort((left, right) => {
+      const leftName = left.name.toLowerCase();
+      const rightName = right.name.toLowerCase();
+      const leftScore = leftName === queryLower ? 0 : leftName.startsWith(queryLower) ? 1 : 2;
+      const rightScore = rightName === queryLower ? 0 : rightName.startsWith(queryLower) ? 1 : 2;
+      return leftScore - rightScore || leftName.localeCompare(rightName);
+    });
+}
+
+export async function addFriendByConnectorProfileId(
+  connectorProfileId: string,
+  user?: User | null,
+) {
+  const profile = await getConnectorProfileById(connectorProfileId);
+
+  if (!profile || profile.kind !== "person") {
+    return { mode: isSupabaseConfigured() ? "supabase" as const : "local" as const, friendId: null };
+  }
+
+  if (isSupabaseConfigured()) {
+    if (!user) {
+      throw new Error("Sign in before adding a friend.");
+    }
+    if (!profile.ownerId) {
+      return { mode: "supabase" as const, friendId: null };
+    }
+
+    const supabase = (await createClient()) as SupabaseClient<Database>;
+    const { error } = await supabase.from("friendships").insert({
+      requester_id: user.id,
+      addressee_id: profile.ownerId,
+      status: "pending",
+    });
+
+    if (error && error.code !== "23505") {
+      throw new Error(`Could not send the connection request: ${error.message}`);
+    }
+
+    return { mode: "supabase" as const, friendId: profile.ownerId };
+  }
+
+  return addLocalFriend(profile.email ?? profile.name);
 }
 
 export async function addFriendByNameOrEmail(friendQuery: string, user?: User | null) {
@@ -493,7 +946,7 @@ export async function addFriendByNameOrEmail(friendQuery: string, user?: User | 
     return addSupabaseFriend(normalizedQuery, user);
   }
 
-  return addLocalFriend(normalizedQuery, user);
+  return addLocalFriend(normalizedQuery);
 }
 
 async function updateSupabaseFriendRequest(
@@ -522,6 +975,22 @@ async function updateSupabaseFriendRequest(
     return { mode: "supabase" as const };
   }
 
+  if (operation === "remove") {
+    const { error } = await supabase
+      .from("friendships")
+      .delete()
+      .eq("status", "accepted")
+      .or(
+        `and(requester_id.eq.${user.id},addressee_id.eq.${friendId}),and(requester_id.eq.${friendId},addressee_id.eq.${user.id})`,
+      );
+
+    if (error) {
+      throw new Error(`Could not remove this friend: ${error.message}`);
+    }
+
+    return { mode: "supabase" as const };
+  }
+
   const query = supabase.from("friendships").delete().eq("status", "pending");
   const { error } =
     operation === "decline"
@@ -529,7 +998,7 @@ async function updateSupabaseFriendRequest(
       : await query.eq("requester_id", user.id).eq("addressee_id", friendId);
 
   if (error) {
-    throw new Error(`Could not ${operation} the friend request: ${error.message}`);
+    throw new Error(`Could not ${operation} the connection request: ${error.message}`);
   }
 
   return { mode: "supabase" as const };
@@ -538,12 +1007,11 @@ async function updateSupabaseFriendRequest(
 async function updateLocalFriendRequest(
   relationshipId: string,
   operation: FriendRequestOperation,
-  user?: User | null,
 ) {
-  const userId = friendsUserId(user);
+  const userId = friendsUserId();
   const records = await readLocalFriends();
   const recordIndex = records.findIndex(
-    (record) => record.user_id === userId && record.id === relationshipId && record.status === "pending",
+    (record) => record.user_id === userId && record.id === relationshipId,
   );
 
   if (recordIndex < 0) {
@@ -553,9 +1021,10 @@ async function updateLocalFriendRequest(
   const record = records[recordIndex];
   const isIncoming = record.direction === "incoming";
   const canUpdate =
-    (operation === "accept" && isIncoming) ||
-    (operation === "decline" && isIncoming) ||
-    (operation === "cancel" && !isIncoming);
+    (record.status === "pending" && operation === "accept" && isIncoming) ||
+    (record.status === "pending" && operation === "decline" && isIncoming) ||
+    (record.status === "pending" && operation === "cancel" && !isIncoming) ||
+    (record.status === "accepted" && operation === "remove");
 
   if (!canUpdate) {
     return { mode: "local" as const, updated: false };
@@ -584,13 +1053,13 @@ export async function updateFriendRequest(
 ) {
   if (isSupabaseConfigured()) {
     if (!user) {
-      throw new Error("Sign in before updating a friend request.");
+      throw new Error("Sign in before updating a connection request.");
     }
 
     return updateSupabaseFriendRequest(friendId, operation, user);
   }
 
-  return updateLocalFriendRequest(friendId, operation, user);
+  return updateLocalFriendRequest(friendId, operation);
 }
 
 export async function recommendConnectorToFriends(
@@ -626,7 +1095,7 @@ export async function recommendConnectorToFriends(
     return { mode: "supabase" as const, created: true };
   }
 
-  const userId = friendsUserId(user);
+  const userId = friendsUserId();
   const recommendations = await readLocalRecommendations();
   const existingIndex = recommendations.findIndex(
     (recommendation) =>
@@ -653,10 +1122,50 @@ export async function recommendConnectorToFriends(
   return { mode: "local" as const, created: true };
 }
 
+export async function getRecommendationsYouMade(user?: User | null): Promise<FriendRecommendationModel[]> {
+  if (isSupabaseConfigured()) {
+    if (!user) return [];
+    const supabase = (await createClient()) as SupabaseClient;
+    const { data, error } = await supabase
+      .from("profile_recommendations")
+      .select("id, recommender_id, connector_profile_id, note, created_at")
+      .eq("recommender_id", user.id)
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(`Could not load your recommendations: ${error.message}`);
+    const records = (data ?? []) as SupabaseRecommendationRow[];
+    const connectors = await getConnectorCardsByIds(records.map((record) => record.connector_profile_id));
+    const connectorsById = new Map(connectors.map((connector) => [connector.id, connector]));
+    return records.flatMap((record) => {
+      const connector = connectorsById.get(record.connector_profile_id);
+      return connector ? [{
+        id: record.id, recommenderName: "You", recommenderInitials: "YO", recommenderProfileHref: "/profile", connector,
+        note: record.note ?? `You recommended ${connector.name}.`, createdAt: record.created_at,
+      }] : [];
+    });
+  }
+
+  const records = (await readLocalRecommendations())
+    .filter((record) => record.user_id === friendsUserId() && record.recommender_name === "You")
+    .sort((left, right) => right.created_at.localeCompare(left.created_at));
+  const connectors = await getConnectorCardsByIds(records.map((record) => record.connector_profile_id));
+  const connectorsById = new Map(connectors.map((connector) => [connector.id, connector]));
+  return records.flatMap((record) => {
+    const connector = connectorsById.get(record.connector_profile_id);
+    return connector ? [{
+      id: record.id, recommenderName: "You", recommenderInitials: "YO", recommenderProfileHref: "/profile", connector,
+      note: record.note, createdAt: record.created_at,
+    }] : [];
+  });
+}
+
 export type {
+  FriendSearchCandidate,
   FriendDirection,
   FriendModel,
   FriendRecommendationModel,
   FriendRequestOperation,
   FriendsDashboard,
+  ProfileRelationshipStatus,
+  ProfileSocialContext,
+  ProfileSocialPerson,
 };
