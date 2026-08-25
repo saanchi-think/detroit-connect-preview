@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "check": "npm run lint && npm run build",
+    "index:search": "node --env-file=.env.local scripts/sync-platform-search-index.mjs",
+    "seed:active-demo": "node scripts/seed-active-community-demo.mjs",
     "seed:demo": "node scripts/generate-synthetic-connectors.mjs --output .demo-data/local-dev-store.json",
     "test:e2e": "node scripts/reset-local-test-data.mjs && playwright test"
   },

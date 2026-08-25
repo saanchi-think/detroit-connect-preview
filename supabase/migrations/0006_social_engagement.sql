@@ -44,6 +44,13 @@ create table if not exists public.forum_post_likes (
 
 alter table public.forum_post_likes enable row level security;
 
+drop policy if exists "Forum post likes are public"
+  on public.forum_post_likes;
+drop policy if exists "Members can like forum posts"
+  on public.forum_post_likes;
+drop policy if exists "Members can remove their own forum likes"
+  on public.forum_post_likes;
+
 create policy "Forum post likes are public"
   on public.forum_post_likes for select
   to anon, authenticated
@@ -100,6 +107,13 @@ create trigger direct_messages_touch_conversation
 
 alter table public.direct_conversations enable row level security;
 alter table public.direct_messages enable row level security;
+
+drop policy if exists "Members can read their direct conversations"
+  on public.direct_conversations;
+drop policy if exists "Members can read messages in their conversations"
+  on public.direct_messages;
+drop policy if exists "Members can send messages in their conversations"
+  on public.direct_messages;
 
 create policy "Members can read their direct conversations"
   on public.direct_conversations for select

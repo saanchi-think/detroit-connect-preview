@@ -2,9 +2,11 @@ import { MessageCircle, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
+import { ProfileSafetyMenu } from "@/components/profile-safety-menu";
 import { addFriendAction } from "@/lib/friends/actions";
 import { getCurrentUser } from "@/lib/auth/user";
 import { getPublicMemberProfile } from "@/lib/members/repository";
+import { getSafetyState } from "@/lib/safety/repository";
 
 type MemberPageProps = {
   params: Promise<{ id: string }>;
@@ -31,6 +33,7 @@ export default async function MemberPage({ params }: MemberPageProps) {
   if (member.connectorProfileId) {
     redirect(`/connectors/${member.connectorProfileId}`);
   }
+  const safetyState = await getSafetyState(member.id, user);
 
   return (
     <main className="page-shell member-profile-page">
@@ -44,12 +47,12 @@ export default async function MemberPage({ params }: MemberPageProps) {
           <p>{member.detail}</p>
         </div>
         <div className="member-profile-actions">
-          {member.isFriend ? (
+          {!safetyState.isBlocked && member.isFriend ? (
             <Link className="profile-action-button primary" href={`/messages/friend:${encodeURIComponent(member.id)}`}>
               <MessageCircle aria-hidden="true" size={16} />
               Message
             </Link>
-          ) : (
+          ) : !safetyState.isBlocked ? (
             <form action={addFriendAction}>
               <input name="friendQuery" type="hidden" value={member.email ?? member.name} />
               <button className="profile-action-button primary" type="submit">
@@ -57,7 +60,14 @@ export default async function MemberPage({ params }: MemberPageProps) {
                 Add friend
               </button>
             </form>
-          )}
+          ) : null}
+          <ProfileSafetyMenu
+            profileHref={`/members/${member.id}`}
+            profileId={`member:${member.id}`}
+            state={safetyState}
+            targetId={member.id}
+            targetName={member.name}
+          />
         </div>
       </section>
     </main>

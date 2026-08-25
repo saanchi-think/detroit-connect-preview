@@ -1,15 +1,16 @@
-import { MessageCircle, SquarePen, Users } from "lucide-react";
+import { Archive, ArchiveRestore, MessageCircle, SquarePen, Users } from "lucide-react";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
 import { getCurrentUser } from "@/lib/auth/user";
 import { getFriendsDashboard } from "@/lib/friends/repository";
+import { setDirectConversationArchivedAction } from "@/lib/messages/actions";
 import { getDirectConversationSummaries } from "@/lib/messages/repository";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export const dynamic = "force-dynamic";
 
 type MessagesPageProps = {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ error?: string; filter?: string }>;
 };
 
 function formatInboxTime(timestamp: string) {
@@ -30,12 +31,23 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
   const [summaries, dashboard] = needsSignIn
     ? [[], { friends: [], incomingRequests: [], outgoingRequests: [], recommendations: [] }]
     : await Promise.all([getDirectConversationSummaries(user), getFriendsDashboard(user)]);
-  const activeFilter = query.filter === "unread" ? "unread" : "all";
-  const unreadTotal = summaries.reduce((total, summary) => total + summary.unreadCount, 0);
-  const visibleSummaries =
-    activeFilter === "unread"
-      ? summaries.filter((summary) => summary.unreadCount > 0)
-      : summaries;
+  const activeFilter =
+    query.filter === "unread"
+      ? "unread"
+      : query.filter === "archived"
+        ? "archived"
+        : "all";
+  const inboxSummaries = summaries.filter((summary) => !summary.isArchived);
+  const archivedSummaries = summaries.filter((summary) => summary.isArchived);
+  const unreadTotal = inboxSummaries.reduce(
+    (total, summary) => total + summary.unreadCount,
+    0,
+  );
+  const visibleSummaries = activeFilter === "archived"
+    ? archivedSummaries
+    : activeFilter === "unread"
+      ? inboxSummaries.filter((summary) => summary.unreadCount > 0)
+      : inboxSummaries;
 
   return (
     <main className="page-shell messages-page">
@@ -49,7 +61,7 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
             </span>
           ) : null}
         </div>
-        {!needsSignIn ? (
+        {!needsSignIn && summaries.length > 0 ? (
           <details className="new-message-control">
             <summary>
               <SquarePen aria-hidden="true" size={17} />
@@ -78,64 +90,111 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
       </section>
 
       {needsSignIn ? (
-        <section className="empty-panel">
+        <section className="empty-panel messages-empty-state">
+          <span className="messages-empty-icon" aria-hidden="true">
+            <MessageCircle size={23} strokeWidth={1.8} />
+          </span>
           <span>Sign in required</span>
           <p>Sign in to view your private conversations.</p>
           <Link href="/login?next=/messages">Sign in</Link>
         </section>
       ) : summaries.length > 0 ? (
         <section className="messages-inbox" aria-label="Your messages">
+          {query.error ? <p className="messages-action-error" role="alert">{query.error}</p> : null}
           <nav className="message-filters" aria-label="Filter conversations">
             <Link className={activeFilter === "all" ? "is-active" : ""} href="/messages">
-              All <span>{summaries.length}</span>
+              All <span>{inboxSummaries.length}</span>
             </Link>
             <Link className={activeFilter === "unread" ? "is-active" : ""} href="/messages?filter=unread">
               Unread <span>{unreadTotal}</span>
             </Link>
+            <Link className={activeFilter === "archived" ? "is-active" : ""} href="/messages?filter=archived">
+              Archived <span>{archivedSummaries.length}</span>
+            </Link>
           </nav>
           {visibleSummaries.length > 0 ? (
-            <div className="conversation-list" aria-label={`${activeFilter === "unread" ? "Unread" : "All"} conversations`}>
+            <div
+              className="conversation-list"
+              aria-label={`${activeFilter === "unread" ? "Unread" : activeFilter === "archived" ? "Archived" : "All"} conversations`}
+            >
               {visibleSummaries.map((summary) => (
-                <Link
-                  aria-label={`Open conversation with ${summary.recipientName}${summary.unreadCount ? `, ${summary.unreadCount} unread` : ""}`}
+                <article
                   className={`conversation-list-item${summary.unreadCount ? " is-unread" : ""}`}
-                  href={`/messages/${summary.recipientId}`}
                   key={summary.id}
                 >
-                  <span className="conversation-profile-avatar" aria-hidden="true">
-                    {summary.recipientInitials}
-                  </span>
-                  <span className="conversation-list-copy">
-                    <span className="conversation-list-heading">
-                      <strong>{summary.recipientName}</strong>
+                  <Link
+                    aria-label={`Open conversation with ${summary.recipientName}${summary.unreadCount ? `, ${summary.unreadCount} unread` : ""}`}
+                    className="conversation-main-link"
+                    href={`/messages/${summary.recipientId}`}
+                  >
+                    <span className="conversation-profile-avatar" aria-hidden="true">
+                      {summary.recipientInitials}
+                    </span>
+                    <span className="conversation-list-copy">
+                      <span className="conversation-list-heading">
+                        <strong>{summary.recipientName}</strong>
+                      </span>
+                      <small>{summary.recipientRole}</small>
+                      <span className="conversation-preview">
+                        {summary.lastMessageIsMine ? "You: " : ""}{summary.lastMessage}
+                      </span>
+                    </span>
+                    <span className="conversation-list-meta">
                       <time dateTime={summary.updatedAt}>{formatInboxTime(summary.updatedAt)}</time>
+                      {summary.unreadCount > 0 ? (
+                        <span className="conversation-unread-count" aria-label={`${summary.unreadCount} unread`}>
+                          {summary.unreadCount}
+                        </span>
+                      ) : null}
                     </span>
-                    <small>{summary.recipientRole}</small>
-                    <span className="conversation-preview">
-                      {summary.lastMessageIsMine ? "You: " : ""}{summary.lastMessage}
-                    </span>
-                  </span>
-                  {summary.unreadCount > 0 ? (
-                    <span className="conversation-unread-count" aria-label={`${summary.unreadCount} unread`}>
-                      {summary.unreadCount}
-                    </span>
-                  ) : null}
-                </Link>
+                  </Link>
+                  <form action={setDirectConversationArchivedAction} className="conversation-archive-form">
+                    <input name="conversationId" type="hidden" value={summary.id} />
+                    <input name="archived" type="hidden" value={String(!summary.isArchived)} />
+                    <input
+                      name="returnTo"
+                      type="hidden"
+                      value={summary.isArchived ? "/messages?filter=archived" : "/messages"}
+                    />
+                    <button
+                      aria-label={`${summary.isArchived ? "Unarchive" : "Archive"} conversation with ${summary.recipientName}`}
+                      title={summary.isArchived ? "Unarchive conversation" : "Archive conversation"}
+                      type="submit"
+                    >
+                      {summary.isArchived
+                        ? <ArchiveRestore aria-hidden="true" size={17} />
+                        : <Archive aria-hidden="true" size={17} />}
+                    </button>
+                  </form>
+                </article>
               ))}
             </div>
           ) : (
             <div className="message-filter-empty">
-              <MessageCircle aria-hidden="true" size={20} />
-              <strong>No unread messages</strong>
-              <Link href="/messages">View all conversations</Link>
+              {activeFilter === "archived"
+                ? <Archive aria-hidden="true" size={20} />
+                : <MessageCircle aria-hidden="true" size={20} />}
+              <strong>
+                {activeFilter === "archived"
+                  ? "No archived chats"
+                  : activeFilter === "unread"
+                    ? "No unread messages"
+                    : "Your inbox is clear"}
+              </strong>
+              <Link href={activeFilter === "all" ? "/messages?filter=archived" : "/messages"}>
+                {activeFilter === "all" ? "View archived chats" : "View all conversations"}
+              </Link>
             </div>
           )}
         </section>
       ) : (
-        <section className="empty-panel">
-          <span>No messages yet</span>
+        <section className="empty-panel messages-empty-state">
+          <span className="messages-empty-icon" aria-hidden="true">
+            <MessageCircle size={23} strokeWidth={1.8} />
+          </span>
+          <span>No conversations yet</span>
           <p>Start a private conversation with a friend or connector.</p>
-          <Link href="/connectors">Find someone to message</Link>
+          <Link href="/connectors">Start a message</Link>
         </section>
       )}
     </main>

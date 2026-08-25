@@ -116,12 +116,12 @@ export async function updateFriendRequestAction(formData: FormData) {
     }
     redirect(`${url.pathname}${url.search}`);
   }
-  redirect("/network");
+  redirect(`/network?request=${encodeURIComponent(operation || "updated")}`);
 }
 
 export async function recommendConnectorAction(formData: FormData) {
   const connectorProfileId = String(formData.get("connectorProfileId") ?? "").trim();
-  const note = String(formData.get("note") ?? "").trim().slice(0, 280);
+  const note = String(formData.get("note") ?? "").trim().slice(0, 50);
   const user = await getCurrentUser();
 
   if (!connectorProfileId) {

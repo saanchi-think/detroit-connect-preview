@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { ensureUserProfile } from "@/lib/auth/user";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 const authSchema = z.object({
   fullName: z.string().trim().max(80).optional(),
@@ -125,4 +126,30 @@ export async function signUpAction(formData: FormData) {
   }
 
   loginRedirect({ message: "Check your email to finish creating your account." });
+}
+
+export async function requestPasswordResetAction(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim();
+  const parsedEmail = z.email().safeParse(email);
+
+  if (!parsedEmail.success) {
+    redirect("/forgot-password?error=Enter+a+valid+email+address.");
+  }
+
+  if (!isSupabaseConfigured()) {
+    redirect("/forgot-password?sent=demo");
+  }
+
+  const headerStore = await headers();
+  const origin = getAuthOrigin(headerStore.get("origin"));
+  const supabase = await getSupabaseForAuth();
+  const { error } = await supabase.auth.resetPasswordForEmail(parsedEmail.data, {
+    redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/account/reset-password")}`,
+  });
+
+  if (error) {
+    redirect(`/forgot-password?error=${encodeURIComponent("We could not send a recovery email. Try again shortly.")}`);
+  }
+
+  redirect("/forgot-password?sent=1");
 }

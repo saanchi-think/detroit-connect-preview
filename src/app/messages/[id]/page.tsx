@@ -1,18 +1,34 @@
-import { ArrowLeft, Send, UserRound } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Forward, UserRound } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { ConnectorAvatar } from "@/components/connector-avatar";
+import { MessageComposer } from "@/components/message-composer";
+import { MessageForwardButton } from "@/components/message-forward-button";
+import { MessageReactionControl } from "@/components/message-reaction-control";
+import { ReportContentMenu } from "@/components/report-content-menu";
 import { getCurrentUser } from "@/lib/auth/user";
-import { sendDirectMessageAction } from "@/lib/messages/actions";
-import { getDirectConversation } from "@/lib/messages/repository";
+import { setDirectConversationArchivedAction } from "@/lib/messages/actions";
+import {
+  getDirectConversation,
+  getMessageForwardRecipients,
+} from "@/lib/messages/repository";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export const dynamic = "force-dynamic";
 
 type MessagePageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; share?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    forwardError?: string;
+    forwardFailed?: string;
+    forwarded?: string;
+    reported?: string;
+    reactionError?: string;
+    safetyError?: string;
+    share?: string;
+  }>;
 };
 
 function formatMessageTime(timestamp: string | null) {
@@ -41,6 +57,7 @@ export default async function MessagePage({ params, searchParams }: MessagePageP
     );
   }
   if (!conversation) notFound();
+  const forwardRecipients = await getMessageForwardRecipients(conversation.profile.id, user);
 
   return (
     <main className="page-shell messages-page message-conversation-page">
@@ -64,18 +81,71 @@ export default async function MessagePage({ params, searchParams }: MessagePageP
               <span>{conversation.profile.role}</span>
             </div>
           </div>
-          <Link
-            aria-label={`View ${conversation.profile.name}'s profile`}
-            className="message-view-profile"
-            href={conversation.profileHref}
-            title={`View ${conversation.profile.name}'s profile`}
-          >
-            <UserRound aria-hidden="true" size={18} />
-          </Link>
+          <div className="message-thread-actions">
+            <form action={setDirectConversationArchivedAction}>
+              <input name="conversationId" type="hidden" value={conversation.conversationId} />
+              <input name="archived" type="hidden" value={String(!conversation.isArchived)} />
+              <input
+                name="returnTo"
+                type="hidden"
+                value={conversation.isArchived
+                  ? `/messages/${encodeURIComponent(id)}`
+                  : "/messages"}
+              />
+              <button
+                aria-label={`${conversation.isArchived ? "Unarchive" : "Archive"} conversation with ${conversation.profile.name}`}
+                className="message-archive-button"
+                title={conversation.isArchived ? "Unarchive conversation" : "Archive conversation"}
+                type="submit"
+              >
+                {conversation.isArchived
+                  ? <ArchiveRestore aria-hidden="true" size={18} />
+                  : <Archive aria-hidden="true" size={18} />}
+              </button>
+            </form>
+            <Link
+              aria-label={`View ${conversation.profile.name}'s profile`}
+              className="message-view-profile"
+              href={conversation.profileHref}
+              title={`View ${conversation.profile.name}'s profile`}
+            >
+              <UserRound aria-hidden="true" size={18} />
+            </Link>
+            <ReportContentMenu
+              reportedUserId={conversation.profile.ownerId}
+              returnTo={`/messages/${encodeURIComponent(id)}`}
+              targetId={conversation.conversationId}
+              targetType="message"
+            />
+          </div>
         </header>
+        {query.reported === "1" ? (
+          <div className="message-thread-notice" role="status">Report submitted for review.</div>
+        ) : null}
+        {query.safetyError ? (
+          <div className="message-thread-notice is-error" role="alert">{query.safetyError}</div>
+        ) : null}
+        {query.forwarded ? (
+          <div className="message-thread-notice" role="status">
+            Message shared with {query.forwarded} {query.forwarded === "1" ? "profile" : "profiles"}.
+            {query.forwardFailed ? ` ${query.forwardFailed} could not be sent.` : ""}
+          </div>
+        ) : null}
+        {query.forwardError ? (
+          <div className="message-thread-notice is-error" role="alert">{query.forwardError}</div>
+        ) : null}
+        {query.reactionError ? (
+          <div className="message-thread-notice is-error" role="alert">{query.reactionError}</div>
+        ) : null}
         <section className="message-history" aria-live="polite">
           {conversation.messages.length > 0 ? conversation.messages.map((message) => (
             <article className={`message-bubble${message.isMine ? " is-mine" : ""}`} key={message.id}>
+              {message.isForwarded ? (
+                <span className="message-forwarded-label">
+                  <Forward aria-hidden="true" size={11} />
+                  Forwarded
+                </span>
+              ) : null}
               <p>{message.body}</p>
               {message.isMine ? (
                 <time dateTime={message.deliveredAt ?? message.createdAt}>
@@ -85,27 +155,29 @@ export default async function MessagePage({ params, searchParams }: MessagePageP
               ) : (
                 <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
               )}
+              <MessageReactionControl
+                messageId={message.id}
+                reactions={message.reactions}
+                returnTo={`/messages/${encodeURIComponent(conversation.profile.id)}`}
+              />
+              <MessageForwardButton
+                currentRecipientId={conversation.profile.id}
+                initialRecipients={forwardRecipients}
+                messageId={message.id}
+                messagePreview={message.body}
+              />
             </article>
           )) : <div className="message-empty"><p>Start a private conversation with {conversation.profile.name.split(" ")[0]}.</p></div>}
         </section>
-        <form action={sendDirectMessageAction} className="message-composer">
-          <input name="connectorProfileId" type="hidden" value={conversation.profile.id} />
-          {query.error ? <p className="form-message is-error">{query.error}</p> : null}
-          <label>
-            <span className="sr-only">Message</span>
-            <textarea
-              autoFocus
-              defaultValue={query.share ?? ""}
-              maxLength={2000}
-              name="body"
-              placeholder={`Message ${conversation.profile.name.split(" ")[0]}`}
-              required
-            />
-          </label>
-          <button aria-label="Send" title="Send message" type="submit">
-            <Send aria-hidden="true" size={18} />
-          </button>
-        </form>
+        <MessageComposer
+          conversationId={conversation.conversationId}
+          currentUserId={user?.id ?? "local-dev-user"}
+          defaultValue={query.share}
+          error={query.error}
+          firstName={conversation.profile.name.split(" ")[0]}
+          profileId={conversation.profile.id}
+          realtimeEnabled={isSupabaseConfigured()}
+        />
       </section>
     </main>
   );

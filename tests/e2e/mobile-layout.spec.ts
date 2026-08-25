@@ -20,6 +20,9 @@ const mobileRoutes = [
     ready: (page: Page) => page.getByRole("region", { name: "Conversation with Maria Rodriguez" }),
   },
   { name: "notifications", path: "/notifications", ready: (page: Page) => page.getByRole("heading", { name: "Notifications", exact: true }) },
+  { name: "settings", path: "/settings", ready: (page: Page) => page.getByRole("heading", { name: "Settings", exact: true }) },
+  { name: "community-guidelines", path: "/community-guidelines", ready: (page: Page) => page.getByRole("heading", { name: "Community Guidelines", exact: true }) },
+  { name: "admin", path: "/admin", ready: (page: Page) => page.getByRole("heading", { name: "Community operations", exact: true }) },
   { name: "create-profile", path: "/create-profile", ready: (page: Page) => page.getByRole("heading", { name: "Create profile", exact: true }) },
   { name: "login", path: "/login", ready: (page: Page) => page.getByRole("heading", { name: "Sign in", exact: true }) },
   {

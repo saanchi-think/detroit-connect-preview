@@ -18,7 +18,7 @@ type KnowledgeRpcRow = {
   similarity: number;
 };
 
-async function createQueryEmbedding(query: string) {
+export async function createQueryEmbedding(query: string) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
@@ -35,6 +35,7 @@ async function createQueryEmbedding(query: string) {
       body: JSON.stringify({
         input: query,
         model: process.env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small",
+        dimensions: 1536,
       }),
       signal: controller.signal,
     });

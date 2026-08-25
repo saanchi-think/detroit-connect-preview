@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Search, SlidersHorizontal } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { ConnectorSearchInput } from "@/components/connector-search-input";
 import { ProfileSnapshot } from "@/components/profile-snapshot";
@@ -83,45 +84,70 @@ export default async function ConnectorsPage({ searchParams }: ConnectorsPagePro
   return (
     <main className="page-shell connectors-page">
       <AppHeader />
-      <section className="page-hero">
+      <section className="page-hero connectors-hero">
         <h1>Connectors</h1>
         {createdId ? (
           <div className="page-notice" role="status">
             Profile created. It is now live in your connector results.
           </div>
         ) : null}
-        <form className="results-search" action="/connectors">
-          <ConnectorSearchInput
-            ariaLabel="Search connectors"
-            defaultValue={params.q ?? ""}
-            placeholder="Housing, schools, business..."
-            profileType={type}
-          />
-          <select aria-label="Filter by profile type" className="profile-type-filter" name="type" defaultValue={type}>
-            <option value="all">All profiles</option>
-            <option value="person">Users</option>
-            <option value="organization">Organizations</option>
-          </select>
-          <select aria-label="Sort profiles" className="profile-sort" name="sort" defaultValue={sort}>
-            <option value="relevance">Most relevant</option>
-            <option value="newest">Newest</option>
-            <option value="name">Name A–Z</option>
-            <option value="neighborhood">Neighborhood</option>
-          </select>
-          <button type="submit">Search</button>
+        <form className="results-search connector-directory-search" action="/connectors">
+          <div className="connector-search-row">
+            <ConnectorSearchInput
+              ariaLabel="Search connectors"
+              defaultValue={params.q ?? ""}
+              label="Search by name, topic, or need"
+              placeholder="Try housing, schools, or small business"
+              profileType={type}
+            />
+            <label className="connector-control-field connector-sort-field">
+              <span>Sort by</span>
+              <select aria-label="Sort profiles" className="profile-sort" name="sort" defaultValue={sort}>
+                <option value="relevance">Most relevant</option>
+                <option value="newest">Newest</option>
+                <option value="name">Name A–Z</option>
+                <option value="neighborhood">Neighborhood</option>
+              </select>
+            </label>
+            <button className="connector-search-submit" type="submit">
+              <Search aria-hidden="true" size={17} />
+              <span>Search</span>
+            </button>
+          </div>
           <div className="connector-filter-row">
-            <select aria-label="Filter by language" name="language" defaultValue={params.language ?? ""}>
-              <option value="">All languages</option>
-              {filterOptions.languages.map((language) => <option key={language}>{language}</option>)}
-            </select>
-            <select aria-label="Filter by neighborhood" name="neighborhood" defaultValue={params.neighborhood ?? ""}>
-              <option value="">All neighborhoods</option>
-              {filterOptions.neighborhoods.map((neighborhood) => <option key={neighborhood}>{neighborhood}</option>)}
-            </select>
-            <select aria-label="Filter by topic" name="topic" defaultValue={params.topic ?? ""}>
-              <option value="">All topics</option>
-              {filterOptions.topics.map((topic) => <option key={topic}>{topic}</option>)}
-            </select>
+            <div className="connector-filter-title">
+              <SlidersHorizontal aria-hidden="true" size={16} />
+              <span>Filters</span>
+            </div>
+            <label className="connector-control-field">
+              <span>Profile</span>
+              <select aria-label="Filter by profile type" className="profile-type-filter" name="type" defaultValue={type}>
+                <option value="all">All profiles</option>
+                <option value="person">Users</option>
+                <option value="organization">Organizations</option>
+              </select>
+            </label>
+            <label className="connector-control-field">
+              <span>Language</span>
+              <select aria-label="Filter by language" name="language" defaultValue={params.language ?? ""}>
+                <option value="">All languages</option>
+                {filterOptions.languages.map((language) => <option key={language}>{language}</option>)}
+              </select>
+            </label>
+            <label className="connector-control-field">
+              <span>Neighborhood</span>
+              <select aria-label="Filter by neighborhood" name="neighborhood" defaultValue={params.neighborhood ?? ""}>
+                <option value="">All neighborhoods</option>
+                {filterOptions.neighborhoods.map((neighborhood) => <option key={neighborhood}>{neighborhood}</option>)}
+              </select>
+            </label>
+            <label className="connector-control-field">
+              <span>Topic</span>
+              <select aria-label="Filter by topic" name="topic" defaultValue={params.topic ?? ""}>
+                <option value="">All topics</option>
+                {filterOptions.topics.map((topic) => <option key={topic}>{topic}</option>)}
+              </select>
+            </label>
             {params.language || params.neighborhood || params.topic ? (
               <Link className="clear-connector-filters" href={`/connectors${query ? `?q=${encodeURIComponent(query)}` : ""}`}>
                 Clear filters

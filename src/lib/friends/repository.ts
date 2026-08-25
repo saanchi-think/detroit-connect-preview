@@ -13,6 +13,8 @@ import {
   getLocalConnectorProfileId,
   getLocalProfileHref,
 } from "@/lib/members/local-member-profiles";
+import { getSafetyState, getSuppressedUserIds } from "@/lib/safety/repository";
+import { fuzzySearchScore } from "@/lib/search/fuzzy";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -34,6 +36,7 @@ type FriendRequestOperation = "accept" | "decline" | "cancel" | "remove";
 
 type FriendRecommendationModel = {
   id: string;
+  recommenderId: string;
   recommenderName: string;
   recommenderInitials: string;
   recommenderProfileHref: string;
@@ -334,8 +337,13 @@ async function writeLocalRecommendations(records: LocalRecommendationRecord[]) {
 
 async function getLocalDashboard(): Promise<FriendsDashboard> {
   const userId = friendsUserId();
+  const { blockedIds, mutedIds } = await getSuppressedUserIds();
   const relationships = (await readLocalFriends())
-    .filter((friend) => friend.user_id === userId)
+    .filter(
+      (friend) =>
+        friend.user_id === userId &&
+        !blockedIds.has(friend.id),
+    )
     .sort((left, right) => right.updated_at.localeCompare(left.updated_at))
     .map(localFriendToModel);
   const acceptedFriendNames = new Set(
@@ -343,11 +351,17 @@ async function getLocalDashboard(): Promise<FriendsDashboard> {
       .filter((friend) => friend.direction === "connected")
       .map((friend) => friend.name),
   );
+  const mutedFriendNames = new Set(
+    relationships
+      .filter((friend) => mutedIds.has(friend.id))
+      .map((friend) => friend.name),
+  );
   const recommendationRecords = (await readLocalRecommendations())
     .filter(
       (recommendation) =>
         recommendation.user_id === userId &&
-        acceptedFriendNames.has(recommendation.recommender_name),
+        acceptedFriendNames.has(recommendation.recommender_name) &&
+        !mutedFriendNames.has(recommendation.recommender_name),
     )
     .sort((left, right) => right.created_at.localeCompare(left.created_at));
   const connectors = await getConnectorCardsByIds(
@@ -361,13 +375,17 @@ async function getLocalDashboard(): Promise<FriendsDashboard> {
     outgoingRequests: relationships.filter((friend) => friend.direction === "outgoing"),
     recommendations: recommendationRecords.flatMap((recommendation) => {
       const connector = connectorsById.get(recommendation.connector_profile_id);
+      const recommender = relationships.find(
+        (friend) => friend.name === recommendation.recommender_name && friend.direction === "connected",
+      );
 
-      if (!connector) {
+      if (!connector || !recommender) {
         return [];
       }
 
       return {
         id: recommendation.id,
+        recommenderId: recommender.id,
         recommenderName: recommendation.recommender_name,
         recommenderInitials: getInitials(recommendation.recommender_name),
         recommenderProfileHref:
@@ -446,6 +464,7 @@ async function getSupabaseDashboard(user?: User | null): Promise<FriendsDashboar
     }
 
     const friendshipRows = (data ?? []) as SupabaseFriendshipRow[];
+    const { blockedIds, mutedIds } = await getSuppressedUserIds(user);
     const friendIds = friendshipRows.map((friendship) =>
       friendship.requester_id === user.id ? friendship.addressee_id : friendship.requester_id,
     );
@@ -458,7 +477,7 @@ async function getSupabaseDashboard(user?: User | null): Promise<FriendsDashboar
       const profile = profileMap.get(friendId);
       const name = profile?.display_name ?? "Detroit Connect member";
 
-      if (friendship.status === "blocked") {
+      if (friendship.status === "blocked" || blockedIds.has(friendId)) {
         return [];
       }
 
@@ -490,15 +509,18 @@ async function getSupabaseDashboard(user?: User | null): Promise<FriendsDashboar
     const acceptedFriendIds = friendshipRows
       .filter((friendship) => friendship.status === "accepted")
       .map((friendship) => (friendship.requester_id === user.id ? friendship.addressee_id : friendship.requester_id));
+    const visibleRecommendationFriendIds = acceptedFriendIds.filter(
+      (friendId) => !mutedIds.has(friendId) && !blockedIds.has(friendId),
+    );
 
-    if (acceptedFriendIds.length === 0) {
+    if (visibleRecommendationFriendIds.length === 0) {
       return { friends, incomingRequests, outgoingRequests, recommendations: [] };
     }
 
     const { data: recommendationData, error: recommendationError } = await supabase
       .from("profile_recommendations")
       .select("id, recommender_id, connector_profile_id, note, created_at")
-      .in("recommender_id", acceptedFriendIds)
+      .in("recommender_id", visibleRecommendationFriendIds)
       .order("created_at", { ascending: false })
       .limit(12);
 
@@ -527,6 +549,7 @@ async function getSupabaseDashboard(user?: User | null): Promise<FriendsDashboar
 
         return {
           id: recommendation.id,
+          recommenderId: recommendation.recommender_id,
           recommenderName,
           recommenderInitials: getInitials(recommenderName),
           recommenderProfileHref: connectorProfileIdsByOwner.get(recommendation.recommender_id)
@@ -888,11 +911,9 @@ export async function searchFriendCandidates(
       return [candidate];
     })
     .sort((left, right) => {
-      const leftName = left.name.toLowerCase();
-      const rightName = right.name.toLowerCase();
-      const leftScore = leftName === queryLower ? 0 : leftName.startsWith(queryLower) ? 1 : 2;
-      const rightScore = rightName === queryLower ? 0 : rightName.startsWith(queryLower) ? 1 : 2;
-      return leftScore - rightScore || leftName.localeCompare(rightName);
+      const leftScore = fuzzySearchScore(queryLower, [left.name, left.role, left.neighborhood]);
+      const rightScore = fuzzySearchScore(queryLower, [right.name, right.role, right.neighborhood]);
+      return leftScore - rightScore || left.name.localeCompare(right.name);
     });
 }
 
@@ -904,6 +925,13 @@ export async function addFriendByConnectorProfileId(
 
   if (!profile || profile.kind !== "person") {
     return { mode: isSupabaseConfigured() ? "supabase" as const : "local" as const, friendId: null };
+  }
+  const safetyState = await getSafetyState(
+    profile.ownerId ?? `local-connector-${profile.id}`,
+    user,
+  );
+  if (safetyState.isBlocked) {
+    throw new Error("Unblock this member in Settings before sending a connection request.");
   }
 
   if (isSupabaseConfigured()) {
@@ -1067,6 +1095,7 @@ export async function recommendConnectorToFriends(
   note: string,
   user?: User | null,
 ) {
+  const shortNote = note.trim().slice(0, 50);
   const [connector] = await getConnectorCardsByIds([connectorProfileId]);
 
   if (!connector) {
@@ -1083,7 +1112,7 @@ export async function recommendConnectorToFriends(
       {
         recommender_id: user.id,
         connector_profile_id: connectorProfileId,
-        note: note || null,
+        note: shortNote || null,
       },
       { onConflict: "recommender_id,connector_profile_id" },
     );
@@ -1108,7 +1137,7 @@ export async function recommendConnectorToFriends(
     user_id: userId,
     recommender_name: "You",
     connector_profile_id: connectorProfileId,
-    note: note || `Recommended ${connector.name} to your Detroit Connect circle.`,
+    note: shortNote || `Recommended ${connector.name}.`,
     created_at: new Date().toISOString(),
   };
 
@@ -1138,7 +1167,7 @@ export async function getRecommendationsYouMade(user?: User | null): Promise<Fri
     return records.flatMap((record) => {
       const connector = connectorsById.get(record.connector_profile_id);
       return connector ? [{
-        id: record.id, recommenderName: "You", recommenderInitials: "YO", recommenderProfileHref: "/profile", connector,
+        id: record.id, recommenderId: user.id, recommenderName: "You", recommenderInitials: "YO", recommenderProfileHref: "/profile", connector,
         note: record.note ?? `You recommended ${connector.name}.`, createdAt: record.created_at,
       }] : [];
     });
@@ -1152,7 +1181,7 @@ export async function getRecommendationsYouMade(user?: User | null): Promise<Fri
   return records.flatMap((record) => {
     const connector = connectorsById.get(record.connector_profile_id);
     return connector ? [{
-      id: record.id, recommenderName: "You", recommenderInitials: "YO", recommenderProfileHref: "/profile", connector,
+      id: record.id, recommenderId: friendsUserId(), recommenderName: "You", recommenderInitials: "YO", recommenderProfileHref: "/profile", connector,
       note: record.note, createdAt: record.created_at,
     }] : [];
   });

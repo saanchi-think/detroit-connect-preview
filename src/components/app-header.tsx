@@ -32,6 +32,8 @@ export function AppHeader() {
   const pathname = usePathname();
   const [email, setEmail] = useState<string | null>(null);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const previewAccountName = process.env.NEXT_PUBLIC_DETROIT_CONNECT_PREVIEW_ACCOUNT?.trim() || null;
 
   useEffect(() => {
     function refreshUnreadMessages() {
@@ -43,7 +45,19 @@ export function AppHeader() {
         .catch(() => undefined);
     }
 
+    function refreshUnreadNotifications() {
+      fetch("/api/notifications/unread-count", { cache: "no-store" })
+        .then((response) => response.json())
+        .then((payload: { count?: number }) => {
+          setUnreadNotificationCount(
+            Number.isFinite(payload.count) ? Math.max(0, Number(payload.count)) : 0,
+          );
+        })
+        .catch(() => undefined);
+    }
+
     refreshUnreadMessages();
+    refreshUnreadNotifications();
 
     try {
       const supabase = createClient();
@@ -60,6 +74,7 @@ export function AppHeader() {
       } = supabase.auth.onAuthStateChange((_event, session) => {
         setEmail(session?.user.email ?? null);
         refreshUnreadMessages();
+        refreshUnreadNotifications();
       });
 
       return () => subscription.unsubscribe();
@@ -107,6 +122,14 @@ export function AppHeader() {
                   {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
                 </span>
               ) : null}
+              {item.href === "/notifications" && unreadNotificationCount > 0 ? (
+                <span
+                  aria-label={`${unreadNotificationCount} unread ${unreadNotificationCount === 1 ? "notification" : "notifications"}`}
+                  className="nav-unread-badge nav-notification-badge"
+                >
+                  {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                </span>
+              ) : null}
             </Link>
           );
         })}
@@ -134,6 +157,15 @@ export function AppHeader() {
             <LogOut aria-hidden="true" size={15} />
             <span>Sign out</span>
           </button>
+        ) : previewAccountName ? (
+          <div
+            aria-label={`Signed-in local preview for ${previewAccountName}`}
+            className="sidebar-session-action sidebar-preview-account"
+            title="Local preview account"
+          >
+            <CircleUserRound aria-hidden="true" size={15} />
+            <span>{previewAccountName}</span>
+          </div>
         ) : (
           <Link className="sidebar-session-action" href="/login">
             <LogIn aria-hidden="true" size={15} />

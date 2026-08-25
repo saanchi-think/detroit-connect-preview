@@ -5,8 +5,13 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
+  const providerError = requestUrl.searchParams.get("error_description") ?? requestUrl.searchParams.get("error");
   const requestedNext = requestUrl.searchParams.get("next") || "/connectors";
   const next = requestedNext.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : "/connectors";
+
+  if (providerError) {
+    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(providerError)}`, requestUrl.origin));
+  }
 
   if (!code) {
     return NextResponse.redirect(new URL("/login?error=Missing auth code.", requestUrl.origin));
@@ -24,9 +29,13 @@ export async function GET(request: Request) {
 
     await ensureUserProfile(supabase, data.user);
     return NextResponse.redirect(new URL(next, requestUrl.origin));
-  } catch {
+  } catch (error) {
+    console.error("[auth/callback] Could not complete sign in", error);
     return NextResponse.redirect(
-      new URL("/login?error=Supabase is not configured yet. Add .env.local first.", requestUrl.origin),
+      new URL(
+        "/login?error=We could not finish creating your account. Please try signing in again.",
+        requestUrl.origin,
+      ),
     );
   }
 }

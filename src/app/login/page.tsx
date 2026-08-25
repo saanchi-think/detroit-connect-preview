@@ -45,7 +45,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <input autoComplete="email" name="email" placeholder="you@example.com" required type="email" />
           </label>
           <label>
-            <span>Password</span>
+            <span className="auth-password-label">
+              Password
+              <Link href="/forgot-password">Forgot password?</Link>
+            </span>
             <input autoComplete="current-password" minLength={8} name="password" required type="password" />
           </label>
           <button className="primary-button" type="submit">

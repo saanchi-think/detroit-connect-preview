@@ -8,7 +8,13 @@ import { saveForumImages, validateForumImages } from "@/lib/forum/images";
 import {
   createForumComment,
   createForumPost,
+  deleteForumPost,
+  toggleForumPostFollow,
+  toggleForumCommentLike,
   toggleForumPostLike,
+  toggleForumPostMute,
+  toggleForumPostSave,
+  updateForumPost,
   updateForumComment,
 } from "@/lib/forum/repository";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -142,4 +148,118 @@ export async function toggleForumPostLikeAction(formData: FormData) {
 
   revalidatePath("/forum");
   redirect(`/forum#post-${postId}`);
+}
+
+export async function toggleForumCommentLikeAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const commentId = String(formData.get("commentId") ?? "").trim();
+
+  if (isSupabaseConfigured() && !user) {
+    redirect(`/login?next=${encodeURIComponent(`/forum#comment-${commentId}`)}`);
+  }
+  if (!commentId) redirect("/forum?error=That+comment+is+not+available.");
+
+  try {
+    await toggleForumCommentLike(commentId, user);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not update the comment like.";
+    redirect(`/forum?error=${encodeURIComponent(message)}#comment-${commentId}`);
+  }
+
+  revalidatePath("/forum");
+  redirect(`/forum#comment-${commentId}`);
+}
+
+export async function editForumPostAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const postId = String(formData.get("postId") ?? "").trim();
+  const parsed = forumPostSchema.safeParse({
+    title: String(formData.get("title") ?? ""),
+    body: String(formData.get("body") ?? ""),
+    topic: String(formData.get("topic") ?? ""),
+  });
+
+  if (isSupabaseConfigured() && !user) {
+    redirect(`/login?next=${encodeURIComponent(`/forum?edit=${postId}#post-${postId}`)}`);
+  }
+  if (!postId || !parsed.success) {
+    redirect(`/forum?error=${encodeURIComponent("Add a title, details, and topic.")}#post-${postId}`);
+  }
+
+  try {
+    await updateForumPost({ postId, ...parsed.data }, user);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not edit the post.";
+    redirect(`/forum?error=${encodeURIComponent(message)}&edit=${encodeURIComponent(postId)}#post-${postId}`);
+  }
+
+  revalidatePath("/forum");
+  revalidatePath("/favorites");
+  redirect(`/forum?updated=1#post-${postId}`);
+}
+
+export async function deleteForumPostAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const postId = String(formData.get("postId") ?? "").trim();
+
+  if (isSupabaseConfigured() && !user) {
+    redirect("/login?next=/forum");
+  }
+  if (!postId) redirect("/forum?error=That+post+is+not+available.");
+
+  try {
+    await deleteForumPost(postId, user);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not delete the post.";
+    redirect(`/forum?error=${encodeURIComponent(message)}#post-${postId}`);
+  }
+
+  revalidatePath("/forum");
+  revalidatePath("/favorites");
+  revalidatePath("/notifications");
+  redirect("/forum?deleted=1");
+}
+
+async function runForumControl(
+  formData: FormData,
+  operation: "save" | "follow" | "mute",
+) {
+  const user = await getCurrentUser();
+  const postId = String(formData.get("postId") ?? "").trim();
+  const requestedReturnTo = String(formData.get("returnTo") ?? `/forum#post-${postId}`);
+  const returnTo =
+    requestedReturnTo.startsWith("/") && !requestedReturnTo.startsWith("//")
+      ? requestedReturnTo
+      : `/forum#post-${postId}`;
+
+  if (isSupabaseConfigured() && !user) {
+    redirect(`/login?next=${encodeURIComponent(returnTo)}`);
+  }
+  if (!postId) redirect("/forum?error=That+post+is+not+available.");
+
+  try {
+    if (operation === "save") await toggleForumPostSave(postId, user);
+    if (operation === "follow") await toggleForumPostFollow(postId, user);
+    if (operation === "mute") await toggleForumPostMute(postId, user);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not update the post.";
+    redirect(`/forum?error=${encodeURIComponent(message)}#post-${postId}`);
+  }
+
+  revalidatePath("/forum");
+  revalidatePath("/favorites");
+  revalidatePath("/notifications");
+  redirect(returnTo);
+}
+
+export async function toggleForumPostSaveAction(formData: FormData) {
+  await runForumControl(formData, "save");
+}
+
+export async function toggleForumPostFollowAction(formData: FormData) {
+  await runForumControl(formData, "follow");
+}
+
+export async function toggleForumPostMuteAction(formData: FormData) {
+  await runForumControl(formData, "mute");
 }

@@ -20,6 +20,7 @@
 /.next-*/
 /out/
 /.demo-data/
+/.active-demo-data/
 /.test-data/
 
 # production

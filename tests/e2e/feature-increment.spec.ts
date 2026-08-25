@@ -27,10 +27,11 @@ const tinyPng = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nLkAAAAASUVORK5CYII=",
   "base64",
 );
+const largePng = Buffer.concat([tinyPng, Buffer.alloc(1_250_000)]);
 
 test.describe.configure({ mode: "serial" });
 
-test("home AI search understands explicit profile constraints and shows citations", async ({ page }) => {
+test("home AI search understands explicit profile constraints without exposing sources", async ({ page }) => {
   resetTestData();
   await page.goto("/");
 
@@ -48,9 +49,54 @@ test("home AI search understands explicit profile constraints and shows citation
   await expect(page.locator(".ai-intent-row")).toContainText("Spanish");
   await expect(page.locator(".ai-connector-list .profile-snapshot")).toHaveCount(1);
   await expect(page.getByRole("heading", { name: "Maria Rodriguez" })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Sources" })).toContainText(
-    "Maria Rodriguez",
-  );
+  await expect(page.getByRole("complementary", { name: "Sources" })).toHaveCount(0);
+  await expect(page.locator(".ai-inline-citation")).toHaveCount(0);
+});
+
+test("AI search keeps its Detroit Connect grounding sources internal", async ({ page }) => {
+  resetTestData();
+
+  await page.goto("/search?q=What+should+I+do+first+after+arriving+utilities+parking");
+  await expect(page.locator(".ai-answer-panel")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Sources" })).toHaveCount(0);
+
+  await page.goto("/search?q=utilities+moving+logistics+city+services");
+  await expect(page.locator(".ai-answer-panel")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Sources" })).toHaveCount(0);
+});
+
+test("profile personalization improves broad searches without overriding explicit constraints", async ({ page }) => {
+  resetTestData();
+
+  type ConnectorRecord = {
+    id: string;
+    owner_id: string | null;
+    name: string;
+    neighborhood: string | null;
+    languages: string[];
+  };
+  const profiles = await readTestJson<ConnectorRecord[]>("local-dev-store.json");
+  const viewerProfile = profiles[20];
+  viewerProfile.owner_id = "local-dev-user";
+  viewerProfile.neighborhood = "Southwest Detroit";
+  viewerProfile.languages = ["English", "Spanish"];
+  await writeTestJson("local-dev-store.json", profiles);
+
+  await page.goto("/search?q=Who+might+be+a+good+fit+for+me");
+  const personalization = page.locator(".ai-personalization-control");
+  await expect(personalization).toContainText("Personalized with");
+  await expect(personalization).toContainText("Southwest Detroit");
+  await expect(personalization).toContainText("Spanish");
+  await expect(page.locator(".ai-connector-list .profile-snapshot")).not.toHaveCount(0);
+
+  await personalization.getByRole("link", { name: "Compare without" }).click();
+  await expect(page).toHaveURL(/personalized=0/);
+  await expect(page.locator(".ai-personalization-control")).toContainText("Question only");
+  await expect(page.getByRole("heading", { name: "No clear match yet" })).toBeVisible();
+
+  await page.goto("/search?q=English+utilities+helper+in+Bagley");
+  const firstExplicitMatch = page.locator(".ai-connector-list .profile-snapshot").first();
+  await expect(firstExplicitMatch.getByRole("heading", { name: "Darnell Williams" })).toBeVisible();
 });
 
 test("Network, profile sharing, profile activity, directory filters, and settings work together", async ({ page }) => {
@@ -115,18 +161,26 @@ test("forum posts support three images and comments can only be edited for two m
     [1, 2, 3].map((index) => ({
       name: `forum-${index}.png`,
       mimeType: "image/png",
-      buffer: tinyPng,
+      buffer: index === 1 ? largePng : tinyPng,
     })),
   );
   await expect(page.locator(".forum-image-preview")).toHaveCount(3);
+  await expect(page.locator(".forum-image-preview img").first()).toHaveCSS("object-fit", "contain");
   await page.getByLabel("Title").fill("Three-image neighborhood question");
-  await page.getByLabel("Details").fill("Which of these three blocks is easiest for a newcomer without a car?");
+  await page
+    .getByRole("textbox", { name: "Post details" })
+    .fill("Which of these three blocks is easiest for a newcomer without a car?");
   await page.getByLabel("Post topic").selectOption("Housing");
-  await page.getByRole("button", { name: "Post request" }).click();
+  await page.getByRole("button", { name: "Preview post" }).click();
+  const preview = page.getByRole("dialog", { name: "Preview your post" });
+  await expect(preview.locator(".forum-post-image")).toHaveCount(3);
+  await expect(preview.locator(".forum-post-image img").first()).toHaveCSS("object-fit", "contain");
+  await preview.getByRole("button", { name: "Publish post" }).click();
 
   let post = page.locator(".forum-post", { hasText: "Three-image neighborhood question" });
   await expect(post.locator(".forum-post-image")).toHaveCount(3);
-  await post.getByText("Add comment", { exact: true }).click();
+  await expect(post.locator(".forum-post-image img").first()).toHaveCSS("object-fit", "contain");
+  await post.getByText("Comment", { exact: true }).click();
   await post.getByPlaceholder("Write a comment...").fill("I would compare the first and third options.");
   await post.getByRole("button", { name: "Post comment" }).click();
 
@@ -134,7 +188,8 @@ test("forum posts support three images and comments can only be edited for two m
   let comment = post.locator(".forum-comment", { hasText: "I would compare the first and third options." }).first();
   await comment.getByRole("button", { name: "Edit" }).click();
   await comment.getByRole("textbox", { name: "Edit comment" }).fill("I would compare the second and third options.");
-  await comment.getByRole("button", { name: "Save" }).click();
+  const activeCommentEditor = post.locator(".forum-comment-edit-form");
+  await activeCommentEditor.getByRole("button", { name: "Save", exact: true }).click();
 
   post = page.locator(".forum-post", { hasText: "Three-image neighborhood question" });
   comment = post.locator(".forum-comment", { hasText: "I would compare the second and third options." }).first();

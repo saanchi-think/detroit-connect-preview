@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { Database, ProfileKind } from "@/lib/database.types";
 import { sampleConnectors } from "@/lib/data/sample-connectors";
 import { getLocalDataPath, writeLocalJson } from "@/lib/local-data";
+import { getLocalMemberIdsForProfile } from "@/lib/members/local-member-profiles";
 import type {
   AvatarKey,
   ConnectorCardModel,
@@ -10,6 +10,13 @@ import type {
   CreateConnectorProfileInput,
   UpdateConnectorProfileInput,
 } from "@/lib/connectors/types";
+import {
+  fuzzySearchScore,
+  fuzzyTokenScore,
+  matchesFuzzySearch,
+  normalizeSearchText,
+  tokenizeFuzzySearch,
+} from "@/lib/search/fuzzy";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -46,13 +53,27 @@ export type ConnectorSearchPage = {
   totalPages: number;
 };
 
+export type MentionTarget = {
+  profileId: string;
+  name: string;
+  ownerId: string | null;
+  profileHref: string;
+};
+
 export type AiConnectorSearchOptions = {
   query: string;
   topics: string[];
   languages: string[];
   neighborhoods: string[];
   type?: "person" | "organization";
+  personalization?: AiConnectorPersonalization;
   limit?: number;
+};
+
+export type AiConnectorPersonalization = {
+  profileId: string;
+  neighborhood: string | null;
+  languages: string[];
 };
 
 export type AiConnectorMatch = {
@@ -61,25 +82,15 @@ export type AiConnectorMatch = {
   matchedLanguages: string[];
   matchedNeighborhood: string | null;
   matchedKeywords: string[];
+  personalizedSignals: string[];
+  questionScore: number;
+  personalizationScore: number;
   score: number;
 };
 
 const LOCAL_STORE_PATH = getLocalDataPath("local-dev-store.json");
 const SAMPLE_ID_PREFIX = "11111111-1111-4111-8111-";
 export const LOCAL_DEMO_USER_ID = "local-dev-user";
-
-function getSupabaseReadClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!isSupabaseConfigured() || !supabaseUrl || !supabaseAnonKey) {
-    return null;
-  }
-
-  return createSupabaseClient(supabaseUrl, supabaseAnonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 function seedRecordFromSample(connector: ConnectorCardModel, index: number): LocalConnectorRecord {
   const createdAt = new Date(Date.UTC(2026, 6, index + 1, 12, 0, 0)).toISOString();
@@ -133,7 +144,7 @@ async function writeLocalStore(records: LocalConnectorRecord[]) {
 }
 
 function normalizeQuery(value?: string) {
-  return value?.trim().toLowerCase() ?? "";
+  return value ? normalizeSearchText(value) : "";
 }
 
 function matchesType(kind: ProfileKind, type?: string) {
@@ -165,7 +176,7 @@ function filterConnectorRows(rows: LocalConnectorRecord[], options: SearchConnec
       return true;
     }
 
-    const haystack = [
+    return matchesFuzzySearch(query, [
       row.name,
       row.headline,
       row.bio,
@@ -178,65 +189,31 @@ function filterConnectorRows(rows: LocalConnectorRecord[], options: SearchConnec
       ...row.topics,
       ...row.skills,
       ...row.availability,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-
-    return haystack.includes(query);
+    ]);
   });
 }
 
 function relevanceScore(row: LocalConnectorRecord, query: string) {
-  const normalizedName = row.name.toLowerCase();
-  const topics = row.topics.map((topic) => topic.toLowerCase());
+  const normalizedName = normalizeSearchText(row.name);
+  const topics = row.topics.map(normalizeSearchText);
 
   if (normalizedName === query) return 0;
   if (normalizedName.startsWith(query)) return 1;
   if (topics.some((topic) => topic === query)) return 2;
   if (normalizedName.includes(query)) return 3;
   if (topics.some((topic) => topic.includes(query))) return 4;
-  return 5;
+  return 5 + fuzzySearchScore(query, [
+    row.name,
+    ...row.topics,
+    row.headline,
+    row.neighborhood,
+    ...row.languages,
+    ...row.skills,
+  ]);
 }
 
 function tokenizeSearchText(value: string) {
-  const stopWords = new Set([
-    "about",
-    "after",
-    "and",
-    "are",
-    "can",
-    "detroit",
-    "find",
-    "for",
-    "from",
-    "help",
-    "i",
-    "in",
-    "is",
-    "looking",
-    "me",
-    "my",
-    "need",
-    "of",
-    "someone",
-    "that",
-    "the",
-    "to",
-    "want",
-    "who",
-    "with",
-  ]);
-
-  return Array.from(
-    new Set(
-      value
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, " ")
-        .split(/\s+/)
-        .filter((token) => token.length > 1 && !stopWords.has(token)),
-    ),
-  );
+  return Array.from(new Set(tokenizeFuzzySearch(value)));
 }
 
 function includesCaseInsensitive(values: string[], expected: string) {
@@ -310,7 +287,7 @@ function rowToProfile(row: LocalConnectorRecord): ConnectorProfileModel {
   return {
     ...card,
     topics: row.topics,
-    ownerId: row.owner_id,
+    ownerId: row.owner_id ?? getLocalMemberIdsForProfile(row.id)[0] ?? null,
     bio: row.bio,
     organizationName: row.organization_name,
     email: row.email,
@@ -351,6 +328,23 @@ export async function getConnectorFilterOptions(): Promise<ConnectorFilterOption
   };
 }
 
+export async function getMentionTargets(): Promise<MentionTarget[]> {
+  return (await getConnectorRows())
+    .filter(
+      (row) =>
+        row.status === "published" &&
+        row.kind === "person" &&
+        row.name.trim().length > 0,
+    )
+    .map((row) => ({
+      profileId: row.id,
+      name: row.name.trim(),
+      ownerId: row.owner_id,
+      profileHref: `/connectors/${row.id}`,
+    }))
+    .sort((left, right) => right.name.length - left.name.length);
+}
+
 function buildConnectorInsert(input: CreateConnectorProfileInput): ConnectorInsert {
   return {
     owner_id: input.ownerId ?? null,
@@ -378,19 +372,36 @@ function buildConnectorInsert(input: CreateConnectorProfileInput): ConnectorInse
 }
 
 async function fetchSupabaseRows() {
-  const supabase = getSupabaseReadClient();
-
-  if (!supabase) {
+  if (!isSupabaseConfigured()) {
     return null;
   }
 
-  const { data, error } = await supabase.from("connector_profiles").select("*").eq("status", "published");
+  const supabase = await createClient();
 
-  if (error) {
-    throw new Error(`Could not load connector profiles: ${error.message}`);
+  const batchSize = 1000;
+  const rows: LocalConnectorRecord[] = [];
+
+  for (let offset = 0; ; offset += batchSize) {
+    const { data, error } = await supabase
+      .from("connector_profiles")
+      .select("*")
+      .eq("status", "published")
+      .order("id", { ascending: true })
+      .range(offset, offset + batchSize - 1);
+
+    if (error) {
+      throw new Error(`Could not load connector profiles: ${error.message}`);
+    }
+
+    const batch = (data ?? []) as LocalConnectorRecord[];
+    rows.push(...batch);
+
+    if (batch.length < batchSize) {
+      break;
+    }
   }
 
-  return data as LocalConnectorRecord[];
+  return rows;
 }
 
 export async function searchConnectorCards(options: SearchConnectorOptions = {}) {
@@ -429,6 +440,7 @@ export async function rankConnectorsForAiSearch(
   const tokens = tokenizeSearchText(options.query);
   const rows = (await getConnectorRows()).filter((row) => {
     if (row.status !== "published") return false;
+    if (row.id === options.personalization?.profileId) return false;
     if (!options.type) return true;
     return (row.kind === "vendor" ? "organization" : row.kind) === options.type;
   });
@@ -456,13 +468,42 @@ export async function rankConnectorsForAiSearch(
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    const matchedKeywords = tokens.filter((token) => searchable.includes(token)).slice(0, 5);
-    const score =
+    const searchableTokens = tokenizeSearchText(searchable);
+    const nameTokens = new Set(tokenizeSearchText(row.name));
+    const matchedKeywords = tokens
+      .filter((token) =>
+        searchableTokens.some((searchableToken) =>
+          Number.isFinite(fuzzyTokenScore(token, searchableToken)),
+        ),
+      )
+      .slice(0, 5);
+    const questionScore =
       matchedTopics.length * 8 +
       matchedLanguages.length * 7 +
       (matchedNeighborhood ? 9 : 0) +
       matchedKeywords.length * 2 +
-      (tokens.some((token) => row.name.toLowerCase().includes(token)) ? 3 : 0);
+      (tokens.some((token) => nameTokens.has(token)) ? 3 : 0);
+    const personalizedSignals: string[] = [];
+    let personalizationScore = 0;
+
+    if (
+      options.personalization?.neighborhood &&
+      options.personalization.neighborhood.toLowerCase() ===
+        (row.neighborhood ?? "").toLowerCase()
+    ) {
+      personalizedSignals.push(options.personalization.neighborhood);
+      personalizationScore += 2;
+    }
+
+    const sharedLanguages = options.personalization?.languages
+      .filter((language) => language.toLowerCase() !== "english")
+      .filter((language) => includesCaseInsensitive(row.languages, language))
+      .slice(0, 1) ?? [];
+
+    if (sharedLanguages.length > 0) {
+      personalizedSignals.push(...sharedLanguages);
+      personalizationScore += 2;
+    }
 
     return {
       connector: card,
@@ -470,7 +511,10 @@ export async function rankConnectorsForAiSearch(
       matchedLanguages,
       matchedNeighborhood,
       matchedKeywords,
-      score,
+      personalizedSignals,
+      questionScore,
+      personalizationScore,
+      score: questionScore + personalizationScore,
     };
   });
 
@@ -479,14 +523,33 @@ export async function rankConnectorsForAiSearch(
     options.languages.length > 0 ||
     options.neighborhoods.length > 0 ||
     tokens.length > 0;
+  const hasQuestionMatches = ranked.some((result) => result.questionScore > 0);
+  const questionMatches = ranked.filter((result) => result.questionScore > 0);
+  const exactMatches = questionMatches.filter(
+    (result) =>
+      (options.languages.length === 0 || result.matchedLanguages.length > 0) &&
+      (options.neighborhoods.length === 0 || Boolean(result.matchedNeighborhood)) &&
+      (options.topics.length === 0 || result.matchedTopics.length > 0),
+  );
+
+  // A query can be perfectly understood even when no one profile covers every
+  // requested constraint. Keep the primary need first, rather than returning
+  // an empty result solely because the directory has a coverage gap.
+  const closestQuestionMatches = options.topics.length > 0
+    ? questionMatches.filter((result) => result.matchedTopics.length > 0)
+    : options.languages.length > 0
+      ? questionMatches.filter((result) => result.matchedLanguages.length > 0)
+      : options.neighborhoods.length > 0
+        ? questionMatches.filter((result) => Boolean(result.matchedNeighborhood))
+        : questionMatches;
   const matching = hasIntent
-    ? ranked.filter(
-        (result) =>
-          result.score > 0 &&
-          (options.languages.length === 0 || result.matchedLanguages.length > 0) &&
-          (options.neighborhoods.length === 0 || Boolean(result.matchedNeighborhood)) &&
-          (options.topics.length === 0 || result.matchedTopics.length > 0),
-      )
+    ? exactMatches.length > 0
+      ? exactMatches
+      : closestQuestionMatches.length > 0
+        ? closestQuestionMatches
+        : hasQuestionMatches
+          ? questionMatches
+          : ranked.filter((result) => result.personalizationScore > 0)
     : ranked;
   const limit = Math.min(Math.max(options.limit ?? 8, 1), 12);
 
@@ -510,6 +573,23 @@ export async function getConnectorCardsByIds(ids: string[]) {
 
   return rows
     .sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0))
+    .map(rowToCard);
+}
+
+export async function getConnectorCardsMentionedInText(text: string) {
+  const normalizedText = normalizeSearchText(text);
+  if (!normalizedText) return [];
+
+  return (await getConnectorRows())
+    .filter((row) => {
+      const name = normalizeSearchText(row.name);
+      return row.status === "published" && name.length >= 3 && normalizedText.includes(name);
+    })
+    .sort((left, right) => {
+      const leftIndex = normalizedText.indexOf(normalizeSearchText(left.name));
+      const rightIndex = normalizedText.indexOf(normalizeSearchText(right.name));
+      return leftIndex - rightIndex || left.name.localeCompare(right.name);
+    })
     .map(rowToCard);
 }
 

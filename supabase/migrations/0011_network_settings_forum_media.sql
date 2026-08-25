@@ -9,6 +9,8 @@ set updated_at = created_at
 where updated_at is null;
 
 drop policy if exists "Authors can update their forum comments" on public.forum_comments;
+drop policy if exists "Authors can update their forum comments for two minutes"
+  on public.forum_comments;
 
 create policy "Authors can update their forum comments for two minutes"
   on public.forum_comments

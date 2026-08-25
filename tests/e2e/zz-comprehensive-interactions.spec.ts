@@ -199,17 +199,23 @@ test("complete social, profile, forum, messaging, search, sorting, notification,
 
   await page.goto("/forum");
   await page.getByLabel("Title").fill("Audit notification question");
-  await page.getByLabel("Details").fill("Testing independent comments, threaded replies, likes, shares, and notifications.");
+  await page
+    .getByRole("textbox", { name: "Post details" })
+    .fill("Testing independent comments, threaded replies, likes, shares, and notifications.");
   await page.getByLabel("Post topic").selectOption("Housing");
-  await page.getByRole("button", { name: "Post request" }).click();
+  await page.getByRole("button", { name: "Preview post" }).click();
+  await page
+    .getByRole("dialog", { name: "Preview your post" })
+    .getByRole("button", { name: "Publish post" })
+    .click();
 
   let auditPost = page.locator(".forum-post", { hasText: "Audit notification question" });
-  await auditPost.getByText("Add comment", { exact: true }).click();
+  await auditPost.getByText("Comment", { exact: true }).click();
   await auditPost.getByPlaceholder("Write a comment...").fill("First independent comment.");
   await auditPost.getByRole("button", { name: "Post comment" }).click();
 
   auditPost = page.locator(".forum-post", { hasText: "Audit notification question" });
-  await auditPost.getByText("Add comment", { exact: true }).click();
+  await auditPost.getByText("Comment", { exact: true }).click();
   await auditPost.getByPlaceholder("Write a comment...").fill("Second independent comment.");
   await auditPost.getByRole("button", { name: "Post comment" }).click();
 
@@ -228,8 +234,15 @@ test("complete social, profile, forum, messaging, search, sorting, notification,
 
   auditPost = page.locator(".forum-post", { hasText: "Audit notification question" });
   const nestedReply = auditPost.locator(".forum-comment", { hasText: "First threaded reply." }).last();
-  const nestedReplyControl = nestedReply.locator(":scope > .forum-comment-copy > .forum-reply-control");
-  await nestedReplyControl.getByText("Reply in thread", { exact: true }).click();
+  const nestedReplyId = await nestedReply.getAttribute("id");
+  expect(nestedReplyId).toBeTruthy();
+  const stableNestedReply = page.locator(`#${nestedReplyId}`);
+  const nestedReplyControl = stableNestedReply.locator(
+    ":scope > .forum-comment-copy > .forum-reply-control",
+  );
+  await nestedReplyControl.evaluate((details: HTMLDetailsElement) => {
+    details.open = true;
+  });
   await expect(nestedReplyControl).toHaveAttribute("open", "");
   await nestedReplyControl.getByPlaceholder("Reply to You").fill("Second-level threaded reply.");
   await nestedReplyControl

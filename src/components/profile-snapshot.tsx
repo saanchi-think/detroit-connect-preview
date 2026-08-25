@@ -1,6 +1,7 @@
 import { Bookmark, MapPin, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { ConnectorAvatar } from "@/components/connector-avatar";
+import { SearchEventLink } from "@/components/search-event-link";
 import type { ConnectorCardModel } from "@/lib/connectors/types";
 import { toggleFavoriteAction } from "@/lib/favorites/actions";
 
@@ -10,6 +11,7 @@ type ProfileSnapshotProps = {
   isSaved?: boolean;
   note?: string | null;
   saveRedirectPath?: string;
+  searchQuery?: string;
   showSaveAction?: boolean;
   showProfileKind?: boolean;
 };
@@ -20,6 +22,7 @@ export function ProfileSnapshot({
   isSaved = false,
   note = null,
   saveRedirectPath = "/favorites",
+  searchQuery,
   showSaveAction = false,
   showProfileKind = false,
 }: ProfileSnapshotProps) {
@@ -40,7 +43,19 @@ export function ProfileSnapshot({
           {showProfileKind || connector.kind === "organization" ? (
             <span className="profile-kind">{kindLabel}</span>
           ) : null}
-          <h3><Link href={profileHref}>{connector.name}</Link></h3>
+          <h3>
+            {searchQuery ? (
+              <SearchEventLink
+                connectorId={connector.id}
+                href={profileHref}
+                query={searchQuery}
+              >
+                {connector.name}
+              </SearchEventLink>
+            ) : (
+              <Link href={profileHref}>{connector.name}</Link>
+            )}
+          </h3>
           <p>{connector.role}</p>
           <p className="profile-snapshot-meta">
             <MapPin aria-hidden="true" size={13} />

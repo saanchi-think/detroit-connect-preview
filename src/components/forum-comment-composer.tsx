@@ -2,6 +2,7 @@
 
 import { MessageCircle } from "lucide-react";
 import { useState } from "react";
+import { MentionTextarea } from "@/components/mention-textarea";
 
 type ForumCommentComposerProps = {
   action: (formData: FormData) => Promise<void>;
@@ -20,15 +21,16 @@ export function ForumCommentComposer({ action, postId }: ForumCommentComposerPro
         onClick={() => setOpen((current) => !current)}
       >
         <MessageCircle aria-hidden="true" size={16} />
-        <span>{open ? "Close comment" : "Add comment"}</span>
+        <span>{open ? "Close comment" : "Comment"}</span>
       </button>
       {open ? (
         <form action={action} aria-label="Add a comment" className="inline-comment-form">
           <input name="postId" type="hidden" value={postId} />
           <label>
             <span className="sr-only">Comment</span>
-            <textarea
+            <MentionTextarea
               autoFocus
+              label="Comment"
               maxLength={500}
               minLength={2}
               name="body"

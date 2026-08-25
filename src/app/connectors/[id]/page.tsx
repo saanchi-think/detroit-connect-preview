@@ -19,6 +19,7 @@ import { notFound } from "next/navigation";
 import { AppHeader } from "@/components/app-header";
 import { ConnectorAvatar } from "@/components/connector-avatar";
 import { ProfileSocialPanel } from "@/components/profile-social-panel";
+import { ProfileSafetyMenu } from "@/components/profile-safety-menu";
 import { ShareButton } from "@/components/share-button";
 import { getCurrentUser } from "@/lib/auth/user";
 import { getConnectorProfileById } from "@/lib/connectors/repository";
@@ -31,13 +32,23 @@ import {
   updateFriendRequestAction,
 } from "@/lib/friends/actions";
 import { getFriendsDashboard, getProfileSocialContext } from "@/lib/friends/repository";
+import { isUuid } from "@/lib/identifiers";
+import { getSafetyState } from "@/lib/safety/repository";
+import { getMemberPrivacyContext } from "@/lib/settings/repository";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export const dynamic = "force-dynamic";
 
 type ConnectorProfilePageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ friend?: string; recommended?: string; updated?: string }>;
+  searchParams: Promise<{
+    friend?: string;
+    recommended?: string;
+    reported?: string;
+    safety?: string;
+    safetyError?: string;
+    updated?: string;
+  }>;
 };
 
 function profileKindLabel(kind: "person" | "vendor" | "organization") {
@@ -53,11 +64,13 @@ export default async function ConnectorProfilePage({ params, searchParams }: Con
     notFound();
   }
 
-  const [favoriteIds, socialContext, dashboard, communityPosts] = await Promise.all([
+  const [favoriteIds, socialContext, dashboard, communityPosts, safetyState, privacyContext] = await Promise.all([
     getFavoriteConnectorIds(user),
     getProfileSocialContext(profile, user),
     getFriendsDashboard(user),
     getForumPostsByProfile(profile, user),
+    getSafetyState(profile.ownerId, user),
+    getMemberPrivacyContext(profile.ownerId, user),
   ]);
   const shareFriends = dashboard.friends.map(({ id, initials, name, profileHref }) => ({
     id,
@@ -67,17 +80,16 @@ export default async function ConnectorProfilePage({ params, searchParams }: Con
   }));
   const isSaved = favoriteIds.includes(profile.id);
   const isSelf = socialContext.relationship === "self";
-  const contactHref = profile.email
+  const contactHref = privacyContext.canViewContact && profile.email
     ? `mailto:${profile.email}`
-    : profile.phone
+    : privacyContext.canViewContact && profile.phone
       ? `tel:${profile.phone}`
       : null;
   const circleSignal =
     socialContext.recommendedBy.length > 0
-      ? `Recommended by ${socialContext.recommendedBy
-          .slice(0, 2)
-          .map((recommendation) => recommendation.name)
-          .join(", ")}${socialContext.recommendedBy.length > 2 ? ` and ${socialContext.recommendedBy.length - 2} more` : ""}`
+      ? `Recommended by ${socialContext.recommendedBy.length} ${
+          socialContext.recommendedBy.length === 1 ? "user" : "users"
+        }`
       : socialContext.mutualFriendCount > 0
         ? `${socialContext.mutualFriendCount} mutual ${socialContext.mutualFriendCount === 1 ? "connection" : "connections"}`
         : profile.friendSignal;
@@ -121,18 +133,19 @@ export default async function ConnectorProfilePage({ params, searchParams }: Con
           </div>
 
           <div className="profile-actions">
+            <div className="profile-primary-actions">
             {isSelf ? (
               <Link className="profile-action-button primary" href="/profile/edit">
                 Edit profile
               </Link>
             ) : null}
-            {!isSelf && (!isSupabaseConfigured() || profile.ownerId) ? (
+            {!isSelf && !safetyState.isBlocked && privacyContext.canMessage ? (
               <Link className="profile-action-button primary" href={`/messages/${profile.id}`}>
                 <MessageCircle aria-hidden="true" size={16} />
                 Message
               </Link>
             ) : null}
-            {profile.kind === "person" && socialContext.relationship === "none" ? (
+            {profile.kind === "person" && !safetyState.isBlocked && socialContext.relationship === "none" ? (
               <form action={addFriendAction}>
                 <input name="connectorProfileId" type="hidden" value={profile.id} />
                 <input name="redirectTo" type="hidden" value={`/connectors/${profile.id}`} />
@@ -170,7 +183,9 @@ export default async function ConnectorProfilePage({ params, searchParams }: Con
                 Respond to request
               </Link>
             ) : null}
-            {!isSelf ? (
+            </div>
+            <div className="profile-utility-actions">
+            {!isSelf && !safetyState.isBlocked ? (
               <form action={toggleFavoriteAction}>
                 <input name="connectorProfileId" type="hidden" value={profile.id} />
                 <input name="redirectTo" type="hidden" value={`/connectors/${profile.id}`} />
@@ -178,6 +193,7 @@ export default async function ConnectorProfilePage({ params, searchParams }: Con
                   aria-label={isSaved ? "Saved" : "Save profile"}
                   aria-pressed={isSaved}
                   className={`profile-action-button save${isSaved ? " is-saved" : ""}`}
+                  data-tooltip={isSaved ? "Remove from favorites" : "Save profile"}
                   title={isSaved ? "Remove from favorites" : "Save profile"}
                   type="submit"
                 >
@@ -186,7 +202,7 @@ export default async function ConnectorProfilePage({ params, searchParams }: Con
                 </button>
               </form>
             ) : null}
-            {!isSelf ? (
+            {!isSelf && !safetyState.isBlocked ? (
               <ShareButton
                 friends={shareFriends}
                 path={`/connectors/${profile.id}`}
@@ -194,33 +210,43 @@ export default async function ConnectorProfilePage({ params, searchParams }: Con
                 variant="profile"
               />
             ) : null}
-            {!isSelf ? (
+            {!isSelf && !safetyState.isBlocked ? (
               <details className="profile-recommend-control">
-                <summary className="profile-action-button">
+                <summary className="profile-action-button" data-tooltip="Recommend" title="Recommend this profile">
                   <Share2 aria-hidden="true" size={16} />
-                  Recommend
+                  <span>Recommend</span>
                 </summary>
                 <form action={recommendConnectorAction}>
                   <input name="connectorProfileId" type="hidden" value={profile.id} />
                   <input name="redirectTo" type="hidden" value={`/connectors/${profile.id}`} />
                   <label>
-                    <span>Recommendation note</span>
+                    <span>Recommendation note (optional, 50 characters)</span>
                     <textarea
-                      maxLength={280}
+                      maxLength={50}
                       name="note"
-                      placeholder="Why should your network contact this connector?"
+                      placeholder="Add a short recommendation"
                     />
                   </label>
                   <button type="submit">Recommend to network</button>
                 </form>
               </details>
             ) : null}
-            {!isSelf && contactHref ? (
-              <a className="profile-action-button" href={contactHref}>
+            {!isSelf && !safetyState.isBlocked && contactHref ? (
+              <a className="profile-action-button contact" data-tooltip="Contact" href={contactHref} title="Contact">
                 <Mail aria-hidden="true" size={16} />
-                Contact
+                <span>Contact</span>
               </a>
             ) : null}
+            {!isSelf && profile.ownerId && (!isSupabaseConfigured() || isUuid(profile.ownerId)) ? (
+              <ProfileSafetyMenu
+                profileHref={`/connectors/${profile.id}`}
+                profileId={profile.id}
+                state={safetyState}
+                targetId={profile.ownerId}
+                targetName={profile.name}
+              />
+            ) : null}
+            </div>
           </div>
         </div>
 
@@ -248,10 +274,31 @@ export default async function ConnectorProfilePage({ params, searchParams }: Con
             Profile updated.
           </div>
         ) : null}
+        {query.safety === "muted" ? (
+          <div className="profile-share-notice" role="status">
+            Notifications from {profile.name} are muted. <Link href="/settings#safety-controls">Manage</Link>
+          </div>
+        ) : null}
+        {query.safety === "unmuted" ? (
+          <div className="profile-share-notice" role="status">
+            Notifications from {profile.name} are on.
+          </div>
+        ) : null}
+        {query.reported === "1" ? (
+          <div className="profile-share-notice" role="status">
+            Report submitted for review.
+          </div>
+        ) : null}
+        {query.safetyError ? (
+          <div className="profile-share-notice is-error" role="alert">
+            {query.safetyError}
+          </div>
+        ) : null}
 
         <nav className="social-profile-tabs" aria-label="Profile sections">
           {profile.bio ? <a href="#profile-about">About</a> : null}
           {profile.kind === "person" ? <a href="#profile-connections">Connections</a> : null}
+          {isSelf ? <Link href="/profile/activity">Activity</Link> : null}
           {communityPosts.length > 0 ? <a href="#profile-posts">Posts</a> : null}
           <a href="#profile-expertise">Expertise</a>
           {profile.skills.length > 0 ? <a href="#profile-skills">Skills</a> : null}
@@ -282,7 +329,9 @@ export default async function ConnectorProfilePage({ params, searchParams }: Con
             <section className="social-profile-section profile-community-posts" id="profile-posts" aria-labelledby="profile-posts-title">
               <div className="profile-section-heading">
                 <h2 id="profile-posts-title">Community posts</h2>
-                <Link href={`/forum#post-${communityPosts[0].id}`}>View in forum</Link>
+                <Link href={isSelf ? "/profile/activity" : `/forum#post-${communityPosts[0].id}`}>
+                  {isSelf ? "View all posts" : "View in forum"}
+                </Link>
               </div>
               <div className="profile-post-list">
                 {communityPosts.map((post) => (

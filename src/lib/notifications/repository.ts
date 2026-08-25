@@ -8,16 +8,18 @@ import {
   getNotificationPreferences,
   type NotificationPreferences,
 } from "@/lib/settings/repository";
+import { getSuppressedUserIds } from "@/lib/safety/repository";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export type NotificationItem = {
   id: string;
-  type: "friend" | "recommendation" | "comment" | "message";
+  type: "friend" | "recommendation" | "comment" | "mention" | "message";
   title: string;
   detail: string;
   href: string;
   createdAt: string;
+  isRead: boolean;
 };
 
 type MemberProfile = {
@@ -44,6 +46,22 @@ type LocalForumStore = {
     body: string;
     created_at: string;
   }>;
+  subscriptions?: Array<{
+    post_id: string;
+    user_id: string;
+    status: "following" | "muted";
+  }>;
+  mentions?: Array<{
+    id: string;
+    actor_id: string;
+    actor_name: string;
+    mentioned_user_id: string;
+    mentioned_name: string;
+    profile_href: string;
+    post_id: string;
+    comment_id: string | null;
+    created_at: string;
+  }>;
 };
 
 const LOCAL_DEMO_USER_ID = "local-dev-user";
@@ -55,21 +73,50 @@ function filterByPreferences(
   return notifications.filter((notification) => {
     if (notification.type === "friend") return preferences.connectionRequests;
     if (notification.type === "message") return preferences.directMessages;
-    if (notification.type === "comment") return preferences.forumReplies;
+    if (notification.type === "comment" || notification.type === "mention") {
+      return preferences.forumReplies;
+    }
     return preferences.recommendations;
   });
 }
 
+function prepareNotifications(
+  notifications: Omit<NotificationItem, "isRead">[],
+  preferences: NotificationPreferences,
+) {
+  const readAt = preferences.notificationsReadAt
+    ? new Date(preferences.notificationsReadAt).getTime()
+    : Number.NaN;
+
+  return filterByPreferences(
+    notifications.map((notification) => ({
+      ...notification,
+      isRead:
+        Number.isFinite(readAt) &&
+        new Date(notification.createdAt).getTime() <= readAt,
+    })),
+    preferences,
+  )
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, 40);
+}
+
 async function getLocalNotifications(user?: User | null): Promise<NotificationItem[]> {
-  const [dashboard, conversations, preferences, ownedProfileId] = await Promise.all([
+  const [dashboard, conversations, preferences, ownedProfileId, suppressedUsers] = await Promise.all([
     getFriendsDashboard(user),
     getDirectConversationSummaries(user),
     getNotificationPreferences(user),
     getOwnedConnectorProfileId(user?.id ?? LOCAL_DEMO_USER_ID),
+    getSuppressedUserIds(user),
   ]);
-  const notifications: NotificationItem[] = [];
+  const hiddenNotificationActors = new Set([
+    ...suppressedUsers.blockedIds,
+    ...suppressedUsers.mutedIds,
+  ]);
+  const notifications: Omit<NotificationItem, "isRead">[] = [];
 
   dashboard.incomingRequests.forEach((friend) => {
+    if (hiddenNotificationActors.has(friend.id)) return;
     notifications.push({
       id: `friend-request-${friend.id}`,
       type: "friend",
@@ -81,6 +128,7 @@ async function getLocalNotifications(user?: User | null): Promise<NotificationIt
   });
 
   dashboard.friends.forEach((friend) => {
+    if (hiddenNotificationActors.has(friend.id)) return;
     notifications.push({
       id: `friend-accepted-${friend.id}`,
       type: "friend",
@@ -103,7 +151,11 @@ async function getLocalNotifications(user?: User | null): Promise<NotificationIt
   });
 
   conversations
-    .filter((conversation) => conversation.unreadCount > 0)
+    .filter(
+      (conversation) =>
+        conversation.unreadCount > 0 &&
+        !hiddenNotificationActors.has(conversation.recipientMemberId),
+    )
     .forEach((conversation) => {
       notifications.push({
         id: `message-${conversation.id}`,
@@ -153,21 +205,47 @@ async function getLocalNotifications(user?: User | null): Promise<NotificationIt
     const store = JSON.parse(
       await readFile(getLocalDataPath("local-dev-forum.json"), "utf8"),
     ) as LocalForumStore;
+    const userId = user?.id ?? LOCAL_DEMO_USER_ID;
+    const subscriptions = store.subscriptions ?? [];
+    const mutedPostIds = new Set(
+      subscriptions
+        .filter((subscription) => subscription.user_id === userId && subscription.status === "muted")
+        .map((subscription) => subscription.post_id),
+    );
+    const followedPostIds = new Set(
+      subscriptions
+        .filter((subscription) => subscription.user_id === userId && subscription.status === "following")
+        .map((subscription) => subscription.post_id),
+    );
     const ownPostIds = new Set(
-      store.posts.filter((post) => post.author_id === LOCAL_DEMO_USER_ID).map((post) => post.id),
+      store.posts.filter((post) => post.author_id === userId).map((post) => post.id),
     );
     const ownCommentIds = new Set(
       store.comments
-        .filter((comment) => comment.author_id === LOCAL_DEMO_USER_ID)
+        .filter((comment) => comment.author_id === userId)
         .map((comment) => comment.id),
     );
     const postTitles = new Map(store.posts.map((post) => [post.id, post.title]));
+    const mentionCommentIds = new Set(
+      (store.mentions ?? [])
+        .filter(
+          (mention) =>
+            mention.mentioned_user_id === userId &&
+            !mutedPostIds.has(mention.post_id) &&
+            mention.comment_id,
+        )
+        .map((mention) => mention.comment_id!),
+    );
 
     store.comments
       .filter(
         (comment) =>
-          comment.author_id !== LOCAL_DEMO_USER_ID &&
+          comment.author_id !== userId &&
+          !hiddenNotificationActors.has(comment.author_id ?? "") &&
+          !mutedPostIds.has(comment.post_id) &&
+          !mentionCommentIds.has(comment.id) &&
           (ownPostIds.has(comment.post_id) ||
+            followedPostIds.has(comment.post_id) ||
             Boolean(comment.parent_comment_id && ownCommentIds.has(comment.parent_comment_id))),
       )
       .forEach((comment) => {
@@ -180,15 +258,33 @@ async function getLocalNotifications(user?: User | null): Promise<NotificationIt
           createdAt: comment.created_at,
         });
       });
+
+    (store.mentions ?? [])
+      .filter(
+        (mention) =>
+          mention.mentioned_user_id === userId &&
+          !hiddenNotificationActors.has(mention.actor_id) &&
+          !mutedPostIds.has(mention.post_id),
+      )
+      .forEach((mention) => {
+        notifications.push({
+          id: `mention-${mention.id}`,
+          type: "mention",
+          title: `${mention.actor_name} mentioned you`,
+          detail: postTitles.get(mention.post_id) ?? "Community post",
+          href: mention.comment_id
+            ? `/forum#comment-${mention.comment_id}`
+            : `/forum#post-${mention.post_id}`,
+          createdAt: mention.created_at,
+        });
+      });
   } catch (error) {
     if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") {
       throw error;
     }
   }
 
-  return filterByPreferences(notifications, preferences)
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    .slice(0, 40);
+  return prepareNotifications(notifications, preferences);
 }
 
 export async function getNotifications(user?: User | null): Promise<NotificationItem[]> {
@@ -207,8 +303,11 @@ export async function getNotifications(user?: User | null): Promise<Notification
     postResult,
     ownCommentResult,
     ownedProfileResult,
+    subscriptionResult,
+    mentionResult,
     conversations,
     preferences,
+    suppressedUsers,
   ] = await Promise.all([
     supabase
       .from("friendships")
@@ -236,8 +335,19 @@ export async function getNotifications(user?: User | null): Promise<Notification
       .from("connector_profiles")
       .select("id")
       .eq("owner_id", user.id),
+    supabase
+      .from("forum_post_subscriptions")
+      .select("post_id, status")
+      .eq("user_id", user.id),
+    supabase
+      .from("forum_mentions")
+      .select("id, actor_id, mentioned_user_id, post_id, comment_id, created_at")
+      .eq("mentioned_user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(40),
     getDirectConversationSummaries(user),
     getNotificationPreferences(user),
+    getSuppressedUserIds(user),
   ]);
 
   const firstError =
@@ -245,13 +355,25 @@ export async function getNotifications(user?: User | null): Promise<Notification
     recommendationResult.error ??
     postResult.error ??
     ownCommentResult.error ??
-    ownedProfileResult.error;
+    ownedProfileResult.error ??
+    subscriptionResult.error ??
+    mentionResult.error;
 
   if (firstError) {
     throw new Error(`Could not load notifications: ${firstError.message}`);
   }
 
-  const friendships = friendshipResult.data ?? [];
+  const hiddenNotificationActors = new Set([
+    ...suppressedUsers.blockedIds,
+    ...suppressedUsers.mutedIds,
+  ]);
+  const friendships = (friendshipResult.data ?? []).filter((friendship) => {
+    const otherId =
+      friendship.requester_id === user.id
+        ? friendship.addressee_id
+        : friendship.requester_id;
+    return !hiddenNotificationActors.has(otherId);
+  });
   const acceptedFriendIds = new Set(
     (friendshipResult.data ?? [])
       .filter((friendship) => friendship.status === "accepted")
@@ -264,18 +386,47 @@ export async function getNotifications(user?: User | null): Promise<Notification
   const ownedProfileIds = new Set((ownedProfileResult.data ?? []).map((profile) => profile.id));
   const recommendations = (recommendationResult.data ?? []).filter(
     (recommendation) =>
-      acceptedFriendIds.has(recommendation.recommender_id) ||
-      ownedProfileIds.has(recommendation.connector_profile_id),
+      !hiddenNotificationActors.has(recommendation.recommender_id) &&
+      (
+        acceptedFriendIds.has(recommendation.recommender_id) ||
+        ownedProfileIds.has(recommendation.connector_profile_id)
+      ),
   );
-  const posts = postResult.data ?? [];
-  const postIds = posts.map((post) => post.id);
+  const ownPosts = postResult.data ?? [];
+  const subscriptions = subscriptionResult.data ?? [];
+  const mutedPostIds = new Set(
+    subscriptions
+      .filter((subscription) => subscription.status === "muted")
+      .map((subscription) => subscription.post_id),
+  );
+  const followedPostIds = subscriptions
+    .filter((subscription) => subscription.status === "following")
+    .map((subscription) => subscription.post_id);
+  const mentions = (mentionResult.data ?? []).filter(
+    (mention) =>
+      !mutedPostIds.has(mention.post_id) &&
+      !hiddenNotificationActors.has(mention.actor_id),
+  );
+  const trackedPostIds = Array.from(
+    new Set([
+      ...ownPosts.map((post) => post.id),
+      ...followedPostIds,
+    ]),
+  ).filter((postId) => !mutedPostIds.has(postId));
+  const titlePostIds = Array.from(
+    new Set([
+      ...ownPosts.map((post) => post.id),
+      ...followedPostIds,
+      ...mentions.map((mention) => mention.post_id),
+    ]),
+  );
   const ownCommentIds = (ownCommentResult.data ?? []).map((comment) => comment.id);
-  const [postCommentResult, threadedReplyResult] = await Promise.all([
-    postIds.length
+  const [postCommentResult, threadedReplyResult, relatedPostResult] = await Promise.all([
+    trackedPostIds.length
     ? await supabase
         .from("forum_comments")
         .select("id, post_id, parent_comment_id, author_id, body, created_at")
-        .in("post_id", postIds)
+        .in("post_id", trackedPostIds)
         .neq("author_id", user.id)
         .order("created_at", { ascending: false })
         .limit(30)
@@ -289,14 +440,23 @@ export async function getNotifications(user?: User | null): Promise<Notification
           .order("created_at", { ascending: false })
           .limit(30)
       : Promise.resolve({ data: [], error: null }),
+    titlePostIds.length
+      ? await supabase
+          .from("forum_posts")
+          .select("id, title")
+          .in("id", titlePostIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
-  if (postCommentResult.error || threadedReplyResult.error) {
+  if (postCommentResult.error || threadedReplyResult.error || relatedPostResult.error) {
     throw new Error(
-      `Could not load notifications: ${(postCommentResult.error ?? threadedReplyResult.error)!.message}`,
+      `Could not load notifications: ${(postCommentResult.error ?? threadedReplyResult.error ?? relatedPostResult.error)!.message}`,
     );
   }
 
+  const mentionCommentIds = new Set(
+    mentions.flatMap((mention) => mention.comment_id ? [mention.comment_id] : []),
+  );
   const comments = Array.from(
     new Map(
       [...(postCommentResult.data ?? []), ...(threadedReplyResult.data ?? [])].map((comment) => [
@@ -304,6 +464,11 @@ export async function getNotifications(user?: User | null): Promise<Notification
         comment,
       ]),
     ).values(),
+  ).filter(
+    (comment) =>
+      !mutedPostIds.has(comment.post_id) &&
+      !hiddenNotificationActors.has(comment.author_id ?? "") &&
+      !mentionCommentIds.has(comment.id),
   );
   const actorIds = new Set<string>();
 
@@ -320,6 +485,7 @@ export async function getNotifications(user?: User | null): Promise<Notification
       actorIds.add(comment.author_id);
     }
   });
+  mentions.forEach((mention) => actorIds.add(mention.actor_id));
 
   const connectorIds = Array.from(
     new Set(recommendations.map((recommendation) => recommendation.connector_profile_id)),
@@ -353,8 +519,10 @@ export async function getNotifications(user?: User | null): Promise<Notification
   const connectorNames = new Map(
     (connectorResult.data ?? []).map((connector) => [connector.id, connector.name]),
   );
-  const postTitles = new Map(posts.map((post) => [post.id, post.title]));
-  const notifications: NotificationItem[] = [];
+  const postTitles = new Map(
+    (relatedPostResult.data ?? ownPosts).map((post) => [post.id, post.title]),
+  );
+  const notifications: Omit<NotificationItem, "isRead">[] = [];
 
   friendships.forEach((friendship) => {
     const friendId =
@@ -406,6 +574,20 @@ export async function getNotifications(user?: User | null): Promise<Notification
     });
   });
 
+  mentions.forEach((mention) => {
+    const actorName = memberNames.get(mention.actor_id) ?? fallbackName(mention.actor_id);
+    notifications.push({
+      id: `mention-${mention.id}`,
+      type: "mention",
+      title: `${actorName} mentioned you`,
+      detail: postTitles.get(mention.post_id) ?? "Community post",
+      href: mention.comment_id
+        ? `/forum#comment-${mention.comment_id}`
+        : `/forum#post-${mention.post_id}`,
+      createdAt: mention.created_at,
+    });
+  });
+
   comments.forEach((comment) => {
     const commenterName = comment.author_id
       ? (memberNames.get(comment.author_id) ?? fallbackName(comment.author_id))
@@ -414,7 +596,10 @@ export async function getNotifications(user?: User | null): Promise<Notification
     notifications.push({
       id: `comment-${comment.id}`,
       type: "comment",
-      title: `${commenterName} replied to you`,
+      title: ownPosts.some((post) => post.id === comment.post_id) ||
+        Boolean(comment.parent_comment_id && ownCommentIds.includes(comment.parent_comment_id))
+        ? `${commenterName} replied to you`
+        : `${commenterName} commented on a conversation you follow`,
       detail: `${postTitles.get(comment.post_id) ?? "Community post"}: ${comment.body}`,
       href: `/forum#post-${comment.post_id}`,
       createdAt: comment.created_at,
@@ -422,7 +607,11 @@ export async function getNotifications(user?: User | null): Promise<Notification
   });
 
   conversations
-    .filter((conversation) => conversation.unreadCount > 0)
+    .filter(
+      (conversation) =>
+        conversation.unreadCount > 0 &&
+        !hiddenNotificationActors.has(conversation.recipientMemberId),
+    )
     .forEach((conversation) => {
       notifications.push({
         id: `message-${conversation.id}`,
@@ -434,7 +623,5 @@ export async function getNotifications(user?: User | null): Promise<Notification
       });
     });
 
-  return filterByPreferences(notifications, preferences)
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    .slice(0, 40);
+  return prepareNotifications(notifications, preferences);
 }

@@ -94,7 +94,7 @@ test("a profile can be saved, recommended, messaged, and viewed in favorites", a
   await expect(page.getByLabel("Saved connector profiles").getByRole("heading", { name: "Maria Rodriguez" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Recommended by you" })).toBeVisible();
   await page.getByLabel("Saved connector profiles").getByRole("button", { name: "Saved" }).click();
-  await expect(page.getByRole("heading", { name: "Saved profiles" })).not.toBeVisible();
+  await expect(page.getByRole("heading", { name: "No saved profiles yet" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Recommended by you" })).toBeVisible();
 });
 
@@ -259,22 +259,43 @@ test("forum posts, likes, threaded replies, profile links, and sharing work", as
   await page.goto("/forum");
 
   await page.getByLabel("Title").fill("Synthetic forum question");
-  await page.getByLabel("Details").fill("This forum post verifies the local synthetic interaction workflow.");
+  await page
+    .getByRole("textbox", { name: "Post details" })
+    .fill("This forum post verifies the local synthetic interaction workflow.");
   await page.getByLabel("Post topic").selectOption("Housing");
-  await page.getByRole("button", { name: "Post request" }).click();
+  await page.getByRole("button", { name: "Preview post" }).click();
+  let postPreview = page.getByRole("dialog", { name: "Preview your post" });
+  await expect(postPreview).toBeVisible();
+  await expect(postPreview.getByText("Housing", { exact: true })).toBeVisible();
+  await expect(postPreview.getByRole("heading", { name: "Synthetic forum question" })).toBeVisible();
+  await expect(postPreview).toContainText(
+    "This forum post verifies the local synthetic interaction workflow.",
+  );
+  await postPreview.getByRole("button", { name: "Back to edit" }).click();
+  await expect(postPreview).not.toBeVisible();
+
+  await page.getByRole("button", { name: "Preview post" }).click();
+  postPreview = page.getByRole("dialog", { name: "Preview your post" });
+  await postPreview.getByRole("button", { name: "Publish post" }).click();
   await expect(page.getByText("Posted.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Synthetic forum question" })).toBeVisible();
 
   const post = page.locator(".forum-post", { hasText: "Synthetic forum question" });
-  await post.getByText("Add comment").click();
+  await post.getByText("Comment").click();
   await post.getByPlaceholder("Write a comment...").fill("Synthetic comment for interaction testing.");
-  await post.getByRole("button", { name: "Post" }).click();
+  await post.getByRole("button", { name: "Post comment", exact: true }).click();
   await expect(page.getByText("Synthetic comment for interaction testing.")).toBeVisible();
 
   await post.getByRole("button", { name: "Like" }).click();
-  await expect(post.getByRole("button", { name: /Liked 1/ })).toBeVisible();
+  const likedButton = post.getByRole("button", { name: /Liked 1/ });
+  await expect(likedButton).toBeVisible();
+  await expect(likedButton.locator("path")).toHaveAttribute("fill", "currentColor");
 
   const topLevelComment = post.locator(".forum-comment", { hasText: "Synthetic comment for interaction testing." }).first();
+  await topLevelComment.getByRole("button", { name: "Like" }).click();
+  const likedCommentButton = topLevelComment.getByRole("button", { name: "Liked 1" });
+  await expect(likedCommentButton).toBeVisible();
+  await expect(likedCommentButton.locator("svg")).toHaveAttribute("fill", "currentColor");
   await topLevelComment.getByText("Reply in thread").click();
   await post.getByPlaceholder("Reply to You").fill("A nested reply for the local forum test.");
   await post.getByRole("button", { name: "Post reply" }).last().click();
@@ -288,7 +309,7 @@ test("forum posts, likes, threaded replies, profile links, and sharing work", as
   await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue(/Synthetic forum question/);
 });
 
-test("the Explore Detroit map filters, selects a place, and responds to zoom controls", async ({ page }) => {
+test("the Explore Detroit map filters, saves a place, and responds to zoom controls", async ({ page }) => {
   await page.goto("/explore");
   await expect(page.getByRole("region", { name: "Explore Detroit" })).toBeVisible();
 
@@ -307,13 +328,53 @@ test("the Explore Detroit map filters, selects a place, and responds to zoom con
   await page.getByRole("button", { name: "Sports" }).click();
   const fordCard = page.locator(".result-list .result-card", { hasText: "Ford Field" });
   await expect(fordCard).toBeVisible();
-  await fordCard.click();
+  await fordCard.locator(".result-card-main").click();
   await expect(fordCard).toHaveClass("result-card is-active");
 
   await expect(page.locator(".leaflet-marker-icon")).toHaveCount(2);
   const zoomIn = page.getByRole("button", { name: "Zoom in" });
   await expect(zoomIn).toBeEnabled();
   await zoomIn.click();
+
+  const saveFord = fordCard.getByRole("button", { name: "Save Ford Field to favorites" });
+  await saveFord.click();
+  await expect(fordCard.getByRole("button", { name: "Remove Ford Field from favorites" })).toBeVisible();
+
+  await page.goto("/favorites?view=places");
+  await expect(page.getByRole("heading", { name: "Saved places" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Ford Field/ })).toBeVisible();
+  await page.getByRole("button", { name: "Remove Ford Field from favorites" }).click();
+  await expect(page.getByRole("link", { name: /Ford Field/ })).toHaveCount(0);
+});
+
+test("search inputs tolerate common spelling mistakes", async ({ page }) => {
+  await page.goto("/");
+  const homeSearch = page.getByRole("combobox", {
+    name: "Search Detroit Connect",
+    exact: true,
+  });
+  await homeSearch.fill("Mria");
+  await expect(page.getByRole("option", { name: /Maria Rodriguez/ })).toBeVisible();
+
+  await page.goto("/connectors?q=Housng");
+  await expect(page.locator(".profile-snapshot").first()).toContainText(/Housing/i);
+  await expect(page.locator(".result-pagination > span")).not.toHaveText("No profiles found");
+
+  await page.goto("/network");
+  const networkSearch = page.getByRole("combobox", { name: "Find someone you know" });
+  await networkSearch.fill("Mria");
+  await expect(page.getByRole("region", { name: "People search results" })).toContainText(
+    "Maria Rodriguez",
+  );
+
+  await page.goto("/explore");
+  const placeSearch = page.getByRole("combobox", { name: "Search Detroit places" });
+  await placeSearch.fill("Corktwn");
+  await expect(page.locator("#map-search-corktown")).toBeVisible();
+
+  await page.goto("/search?q=I%20need%20housng%20help");
+  await expect(page.getByRole("heading", { name: "Recommended connectors" })).toBeVisible();
+  await expect(page.locator(".ai-intent-row")).toContainText("Housing");
 });
 
 test("the home search and profile creator work against the synthetic directory", async ({ page }) => {

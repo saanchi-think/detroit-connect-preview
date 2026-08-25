@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Heart, ListFilter } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type * as Leaflet from "leaflet";
+import { toggleFavoritePlaceAction } from "@/lib/favorites/actions";
+import { fuzzySearchScore } from "@/lib/search/fuzzy";
 
 const filters = [
   { value: "all", label: "All" },
@@ -14,8 +17,6 @@ const filters = [
   { value: "sports", label: "Sports" },
   { value: "parks", label: "Parks" },
 ];
-
-const initialPlaceId = "downtown";
 
 type Place = {
   id: string;
@@ -290,9 +291,21 @@ function zoomStatusFor(zoom: number) {
   return zoom >= 15 ? "Street detail" : zoom >= 13 ? "District detail" : "City view";
 }
 
-export function ExploreMap() {
+type ExploreMapProps = {
+  initialPlaceId?: string;
+  initialSavedPlaceIds?: string[];
+};
+
+export function ExploreMap({
+  initialPlaceId = "downtown",
+  initialSavedPlaceIds = [],
+}: ExploreMapProps) {
   const [activeFilter, setActiveFilter] = useState("all");
   const [activePlaceId, setActivePlaceId] = useState(initialPlaceId);
+  const [savedPlaceIds, setSavedPlaceIds] = useState(() => new Set(initialSavedPlaceIds));
+  const [savingPlaceId, setSavingPlaceId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState("");
+  const [isSaving, startSaving] = useTransition();
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -300,7 +313,8 @@ export function ExploreMap() {
   const [mapReady, setMapReady] = useState(false);
   const [zoomStatus, setZoomStatus] = useState("City view");
   const [zoomLevel, setZoomLevel] = useState(13);
-  const searchRef = useRef<HTMLFormElement | null>(null);
+  const controlsRef = useRef<HTMLDivElement | null>(null);
+  const initialPlaceIdRef = useRef(initialPlaceId);
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<typeof Leaflet | null>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
@@ -309,17 +323,28 @@ export function ExploreMap() {
 
   const visiblePlaces = useMemo(() => places.filter((place) => categoryMatches(place, activeFilter)), [activeFilter]);
   const searchSuggestions = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = searchQuery.trim();
 
     if (!query) return [];
 
     return places
-      .filter((place) =>
-        [place.name, place.note, place.section, place.type, place.category]
-          .join(" ")
-          .toLowerCase()
-          .includes(query),
+      .map((place) => ({
+        place,
+        score: fuzzySearchScore(query, [
+          place.name,
+          place.note,
+          place.section,
+          place.type,
+          place.category,
+          place.description,
+        ]),
+      }))
+      .filter(({ score }) => Number.isFinite(score))
+      .sort(
+        (left, right) =>
+          left.score - right.score || left.place.name.localeCompare(right.place.name),
       )
+      .map(({ place }) => place)
       .slice(0, 6);
   }, [searchQuery]);
   const activePlace = placeById[activePlaceId] ?? places[0];
@@ -365,7 +390,7 @@ export function ExploreMap() {
         const isNeighborhood = isNeighborhoodMarker(id);
         const markerClass = isNeighborhood ? " marker-neighborhood" : ` marker-${placeById[id].category}`;
         return L.divIcon({
-          className: `detroit-marker${markerClass}${id === initialPlaceId ? " is-selected" : ""}`,
+          className: `detroit-marker${markerClass}${id === initialPlaceIdRef.current ? " is-selected" : ""}`,
           html: isNeighborhood ? `<span></span>${placeById[id].name}` : "<span></span>",
           iconSize: undefined,
         });
@@ -442,15 +467,16 @@ export function ExploreMap() {
   }, [activePlace]);
 
   useEffect(() => {
-    function closeSearch(event: PointerEvent) {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+    function closeControls(event: PointerEvent) {
+      if (controlsRef.current && !controlsRef.current.contains(event.target as Node)) {
         setSearchOpen(false);
         setActiveSearchIndex(-1);
+        setFilterOpen(false);
       }
     }
 
-    document.addEventListener("pointerdown", closeSearch);
-    return () => document.removeEventListener("pointerdown", closeSearch);
+    document.addEventListener("pointerdown", closeControls);
+    return () => document.removeEventListener("pointerdown", closeControls);
   }, []);
 
   function changeZoom(delta: 1 | -1) {
@@ -473,149 +499,196 @@ export function ExploreMap() {
     setFilterOpen(false);
   }
 
+  function toggleSavedPlace(place: Place) {
+    setSavingPlaceId(place.id);
+    setSaveError("");
+    startSaving(async () => {
+      try {
+        const result = await toggleFavoritePlaceAction(place.id);
+        setSavedPlaceIds((current) => {
+          const next = new Set(current);
+          if (result.saved) next.add(place.id);
+          else next.delete(place.id);
+          return next;
+        });
+      } catch {
+        setSaveError(`Could not update ${place.name}. Try again.`);
+      } finally {
+        setSavingPlaceId(null);
+      }
+    });
+  }
+
   return (
     <section className="explore-hero" aria-labelledby="explore-title">
       <div className="copy-panel">
-        <form
-          aria-label="Search Detroit places"
-          className="map-search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const match = searchSuggestions[activeSearchIndex] ?? searchSuggestions[0];
-            if (match) selectSearchPlace(match);
-          }}
-          ref={searchRef}
-          role="search"
-        >
-          <svg aria-hidden="true" viewBox="0 0 24 24">
-            <circle cx="11" cy="11" r="6" />
-            <path d="M16 16l4 4" />
-          </svg>
-          <input
-            aria-activedescendant={
-              activeSearchIndex >= 0 && searchSuggestions[activeSearchIndex]
-                ? `map-search-${searchSuggestions[activeSearchIndex].id}`
-                : undefined
-            }
-            aria-autocomplete="list"
-            aria-controls="map-search-suggestions"
-            aria-expanded={searchOpen}
+        <div className="explore-search-toolbar" ref={controlsRef}>
+          <form
             aria-label="Search Detroit places"
-            autoComplete="off"
-            onChange={(event) => {
-              setSearchQuery(event.target.value);
-              setSearchOpen(Boolean(event.target.value.trim()));
-              setActiveSearchIndex(-1);
+            className="map-search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const match = searchSuggestions[activeSearchIndex] ?? searchSuggestions[0];
+              if (match) selectSearchPlace(match);
             }}
-            onFocus={() => {
-              if (searchQuery.trim()) setSearchOpen(true);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                setSearchOpen(false);
+            role="search"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="6" />
+              <path d="M16 16l4 4" />
+            </svg>
+            <input
+              aria-activedescendant={
+                activeSearchIndex >= 0 && searchSuggestions[activeSearchIndex]
+                  ? `map-search-${searchSuggestions[activeSearchIndex].id}`
+                  : undefined
+              }
+              aria-autocomplete="list"
+              aria-controls="map-search-suggestions"
+              aria-expanded={searchOpen}
+              aria-label="Search Detroit places"
+              autoComplete="off"
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setSearchOpen(Boolean(event.target.value.trim()));
                 setActiveSearchIndex(-1);
-                return;
-              }
-
-              if (event.key === "ArrowDown" && searchSuggestions.length > 0) {
-                event.preventDefault();
-                setSearchOpen(true);
-                setActiveSearchIndex((current) => (current + 1) % searchSuggestions.length);
-                return;
-              }
-
-              if (event.key === "ArrowUp" && searchSuggestions.length > 0) {
-                event.preventDefault();
-                setSearchOpen(true);
-                setActiveSearchIndex((current) =>
-                  current <= 0 ? searchSuggestions.length - 1 : current - 1,
-                );
-              }
-            }}
-            placeholder="Search Detroit places..."
-            role="combobox"
-            type="search"
-            value={searchQuery}
-          />
-          {searchOpen ? (
-            <div className="map-search-suggestions" id="map-search-suggestions" role="listbox">
-              {searchSuggestions.length > 0 ? (
-                searchSuggestions.map((place, index) => (
-                  <button
-                    aria-selected={activeSearchIndex === index}
-                    className={activeSearchIndex === index ? "is-active" : ""}
-                    id={`map-search-${place.id}`}
-                    key={place.id}
-                    onClick={() => selectSearchPlace(place)}
-                    onPointerMove={() => setActiveSearchIndex(index)}
-                    role="option"
-                    type="button"
-                  >
-                    <span className={`map-search-thumb ${place.thumb}`} aria-hidden="true" />
-                    <span>
-                      <strong>{place.name}</strong>
-                      <small>{place.note}</small>
-                    </span>
-                    <em>{place.section}</em>
-                  </button>
-                ))
-              ) : (
-                <p>No Detroit places found</p>
-              )}
-            </div>
-          ) : null}
-        </form>
-        <button
-          className="filter-launch"
-          type="button"
-          aria-label="Open filters"
-          aria-expanded={filterOpen}
-          onFocus={() => setFilterOpen(true)}
-          onPointerDown={() => setFilterOpen(true)}
-          onClick={() => setFilterOpen(true)}
-        >
-          <svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="M6 7h12" />
-            <path d="M8 12h8" />
-            <path d="M10 17h4" />
-          </svg>
-          <span>9</span>
-        </button>
-        <h1 id="explore-title">Explore Detroit</h1>
-        <div className={`filter-row ${filterOpen ? "is-open" : ""}`} aria-label="Map filters">
-          {filters.map((filter) => (
-            <button
-              className={`filter ${activeFilter === filter.value ? "is-active" : ""}`}
-              key={filter.value}
-              type="button"
-              onClick={() => {
-                setActiveFilter(filter.value);
-                setFilterOpen(false);
               }}
+              onFocus={() => {
+                if (searchQuery.trim()) setSearchOpen(true);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setSearchOpen(false);
+                  setActiveSearchIndex(-1);
+                  return;
+                }
+
+                if (event.key === "ArrowDown" && searchSuggestions.length > 0) {
+                  event.preventDefault();
+                  setSearchOpen(true);
+                  setActiveSearchIndex((current) => (current + 1) % searchSuggestions.length);
+                  return;
+                }
+
+                if (event.key === "ArrowUp" && searchSuggestions.length > 0) {
+                  event.preventDefault();
+                  setSearchOpen(true);
+                  setActiveSearchIndex((current) =>
+                    current <= 0 ? searchSuggestions.length - 1 : current - 1,
+                  );
+                }
+              }}
+              placeholder="Search Detroit places..."
+              role="combobox"
+              type="search"
+              value={searchQuery}
+            />
+            {searchOpen ? (
+              <div className="map-search-suggestions" id="map-search-suggestions" role="listbox">
+                {searchSuggestions.length > 0 ? (
+                  searchSuggestions.map((place, index) => (
+                    <button
+                      aria-selected={activeSearchIndex === index}
+                      className={activeSearchIndex === index ? "is-active" : ""}
+                      id={`map-search-${place.id}`}
+                      key={place.id}
+                      onClick={() => selectSearchPlace(place)}
+                      onPointerMove={() => setActiveSearchIndex(index)}
+                      role="option"
+                      type="button"
+                    >
+                      <span className={`map-search-thumb ${place.thumb}`} aria-hidden="true" />
+                      <span>
+                        <strong>{place.name}</strong>
+                        <small>{place.note}</small>
+                      </span>
+                      <em>{place.section}</em>
+                    </button>
+                  ))
+                ) : (
+                  <p>No Detroit places found</p>
+                )}
+              </div>
+            ) : null}
+          </form>
+          <div className="explore-filter-control">
+            <button
+              aria-controls="detroit-map-filters"
+              aria-expanded={filterOpen}
+              aria-label={filterOpen ? "Close filters" : "Open filters"}
+              className="filter-launch"
+              onClick={() => setFilterOpen((current) => !current)}
+              title="Filter Detroit places"
+              type="button"
             >
-              {filter.label}
+              <ListFilter aria-hidden="true" />
+              <span className="filter-launch-label">Filters</span>
             </button>
-          ))}
+            <div
+              className={`filter-row ${filterOpen ? "is-open" : ""}`}
+              id="detroit-map-filters"
+              aria-label="Map filters"
+            >
+              {filters.map((filter) => (
+                <button
+                  className={`filter ${activeFilter === filter.value ? "is-active" : ""}`}
+                  key={filter.value}
+                  type="button"
+                  onClick={() => {
+                    setActiveFilter(filter.value);
+                    setFilterOpen(false);
+                  }}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
+        <h1 id="explore-title">Explore Detroit</h1>
         <div className={`result-list ${activeFilter === "all" ? "" : "is-filtered"}`} aria-label="Detroit map results">
+          {saveError ? <p className="place-save-error" role="alert">{saveError}</p> : null}
           {visibleSections.map((section) => (
             <div className="result-group" key={section}>
               <div className="result-section-title">{section}</div>
               {visiblePlaces
                 .filter((place) => place.section === section)
                 .map((place) => (
-                  <button
+                  <div
                     className={`result-card ${activePlace.id === place.id ? "is-active" : ""}`}
                     key={place.id}
-                    type="button"
-                    onClick={() => setActivePlaceId(place.id)}
                   >
-                    <span className={`thumb ${place.thumb}`} aria-hidden="true" />
-                    <span>
-                      <strong>{place.name}</strong>
-                      <small>{place.note}</small>
-                    </span>
-                  </button>
+                    <button
+                      className="result-card-main"
+                      type="button"
+                      onClick={() => setActivePlaceId(place.id)}
+                    >
+                      <span className={`thumb ${place.thumb}`} aria-hidden="true" />
+                      <span>
+                        <strong>{place.name}</strong>
+                        <small>{place.note}</small>
+                      </span>
+                    </button>
+                    <button
+                      aria-label={
+                        savedPlaceIds.has(place.id)
+                          ? `Remove ${place.name} from favorites`
+                          : `Save ${place.name} to favorites`
+                      }
+                      aria-pressed={savedPlaceIds.has(place.id)}
+                      className={`place-save-button${savedPlaceIds.has(place.id) ? " is-saved" : ""}`}
+                      disabled={isSaving && savingPlaceId === place.id}
+                      onClick={() => toggleSavedPlace(place)}
+                      title={savedPlaceIds.has(place.id) ? "Saved" : "Save place"}
+                      type="button"
+                    >
+                      <Heart
+                        aria-hidden="true"
+                        fill={savedPlaceIds.has(place.id) ? "currentColor" : "none"}
+                        size={16}
+                      />
+                    </button>
+                  </div>
                 ))}
             </div>
           ))}

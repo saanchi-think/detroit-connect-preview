@@ -1,8 +1,28 @@
 import type { ConnectorFilterOptions } from "@/lib/connectors/repository";
 import type { AiSearchIntent } from "@/lib/ai-search/types";
+import { matchesFuzzySearch, normalizeSearchText } from "@/lib/search/fuzzy";
 
 const TOPIC_ALIASES: Record<string, string[]> = {
-  Housing: ["apartment", "buy a home", "buying", "home", "housing", "landlord", "rent", "renter"],
+  Housing: [
+    "apartment",
+    "buy a home",
+    "buying",
+    "home",
+    "housing",
+    "landlord",
+    "lease",
+    "leases",
+    "leasing",
+    "mortgage",
+    "rent",
+    "renter",
+    "rental",
+    "rentals",
+    "sublet",
+    "sublease",
+    "tenant",
+    "tenants",
+  ],
   Schools: ["childcare", "daycare", "education", "school", "schools"],
   Business: ["business", "company", "entrepreneur", "startup"],
   Permits: ["inspection", "license", "licensing", "permit", "permits"],
@@ -19,18 +39,25 @@ const TOPIC_ALIASES: Record<string, string[]> = {
 };
 
 const STOP_WORDS = new Set([
+  "a",
   "about",
+  "an",
   "and",
   "are",
+  "at",
+  "be",
   "can",
   "detroit",
+  "does",
   "find",
   "for",
   "from",
   "help",
+  "how",
   "i",
   "in",
   "is",
+  "it",
   "looking",
   "me",
   "my",
@@ -39,18 +66,24 @@ const STOP_WORDS = new Set([
   "someone",
   "that",
   "the",
+  "this",
   "to",
   "want",
+  "we",
+  "what",
+  "where",
   "who",
   "with",
+  "you",
+  "your",
 ]);
 
 function normalized(value: string) {
-  return value.toLowerCase().replace(/[^\p{L}\p{N}\s&]/gu, " ").replace(/\s+/g, " ").trim();
+  return normalizeSearchText(value);
 }
 
 function includesPhrase(query: string, phrase: string) {
-  return ` ${query} `.includes(` ${normalized(phrase)} `);
+  return matchesFuzzySearch(phrase, [query]);
 }
 
 export function inferSearchIntent(

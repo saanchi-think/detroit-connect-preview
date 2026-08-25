@@ -33,6 +33,17 @@ This uses `example.test` contact details only and does not modify Supabase or th
 
 For a staging Supabase project, use `supabase/seed/1000_synthetic_connector_profiles.sql`. It is idempotent and does not create auth users. Never run it in production. The paired removal script only deletes profiles marked as synthetic.
 
+## Active local preview
+
+Start a populated preview account without signing in. It uses an isolated local data folder with a profile, saved items, network activity, messages, forum posts, and notifications.
+
+```bash
+npm run seed:active-demo
+DETROIT_CONNECT_DATA_MODE=local DETROIT_CONNECT_DATA_DIR=.active-demo-data NEXT_PUBLIC_DETROIT_CONNECT_PREVIEW_ACCOUNT="Saanchi Agarwal" npm run dev -- -p 5205
+```
+
+Open [http://127.0.0.1:5205](http://127.0.0.1:5205). This never sends demo actions or data to Supabase.
+
 ## Connect Supabase
 
 1. Create a Supabase project.
@@ -47,6 +58,49 @@ NEXT_PUBLIC_SITE_URL=http://localhost:5200
 ```
 
 The service-role key is not required for normal user workflows. Never expose it in browser code or commit it to Git.
+
+## Notification delivery
+
+In-app notifications work with the standard Supabase configuration. Optional email delivery requires these server-only environment variables:
+
+```bash
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+RESEND_API_KEY=your-resend-api-key
+NOTIFICATION_EMAIL_FROM="Detroit Connect <notifications@your-domain.com>"
+NOTIFICATION_CRON_SECRET=a-long-random-secret
+```
+
+Run `supabase/migrations/0016_notification_delivery.sql` before enabling email delivery. It adds notification events, per-user email preferences, digest frequency, read state, and the `mark_all_notifications_read()` database function.
+
+Schedule a production cron job to call the digest endpoint every 15 minutes:
+
+```bash
+curl -X POST https://your-domain.com/api/notifications/digest \
+  -H "Authorization: Bearer $NOTIFICATION_CRON_SECRET"
+```
+
+The endpoint sends only users whose selected schedule is due: immediately, daily, or weekly. Email delivery is off by default and must be enabled by each user in Settings.
+
+## Automatic AI search indexing
+
+Run `supabase/migrations/0020_search_operations.sql` after the hybrid-search migration. Profile, forum, comment, and recommendation changes then enter a durable embedding queue automatically. Failed jobs retry with exponential backoff and appear in the administrator search-health panel.
+
+The server worker needs these private variables:
+
+```bash
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+OPENAI_API_KEY=your-openai-key
+SEARCH_INDEX_CRON_SECRET=a-different-long-random-secret
+```
+
+Schedule the worker every one to five minutes. It processes up to 96 documents per invocation:
+
+```bash
+curl -X POST https://your-domain.com/api/search/index \
+  -H "Authorization: Bearer $SEARCH_INDEX_CRON_SECRET"
+```
+
+Search analytics capture response time, result counts, result clicks, and answer feedback. Email addresses and phone-like strings are masked before a query is stored. IP addresses are not collected by the application.
 
 ## Auth configuration
 
@@ -89,9 +143,9 @@ Run the isolated interaction suite with:
 npm run test:e2e
 ```
 
-The test suite starts its own local app on port 5202, forces local data mode, creates a fresh `.test-data` directory, and checks the implemented directory, profile, favorites, recommendation, friend, forum, share, map, home search, and profile-creation workflows.
+The test suite starts its own local app on port 5202, forces local data mode, creates a fresh `.test-data` directory, and checks the implemented directory, profile, favorites, recommendation, network, forum, message, notification, share, map, home search, and profile-creation workflows.
 
-`Like` and direct-message interactions are not yet product features, so they are intentionally listed as gaps rather than treated as passing tests. Google OAuth is tested manually with two real staging accounts because it redirects through Google.
+Google OAuth and real email delivery are tested manually with staging accounts because they depend on external providers.
 
 Before client delivery, test with two real accounts in separate browser sessions:
 
