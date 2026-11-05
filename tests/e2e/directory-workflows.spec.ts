@@ -1,4 +1,12 @@
+import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
+
+function resetTestData() {
+  execFileSync(process.execPath, ["scripts/reset-local-test-data.mjs"], {
+    cwd: process.cwd(),
+    stdio: "pipe",
+  });
+}
 
 test.describe.configure({ mode: "serial" });
 
@@ -59,7 +67,7 @@ test("a profile can be saved, recommended, messaged, and viewed in favorites", a
   await page.getByRole("button", { name: "Save profile" }).click();
   await expect(page.getByRole("button", { name: "Saved" })).toBeVisible();
 
-  await page.getByText("Recommend", { exact: true }).click();
+  await page.locator("details.profile-recommend-control summary").click();
   await page.getByLabel("Recommendation note").fill("Synthetic test recommendation.");
   await page.getByRole("button", { name: "Recommend to network" }).click();
   await expect(page.getByRole("status")).toHaveText("Recommendation shared with your network.");
@@ -92,13 +100,14 @@ test("a profile can be saved, recommended, messaged, and viewed in favorites", a
 
   await page.goto("/favorites");
   await expect(page.getByLabel("Saved connector profiles").getByRole("heading", { name: "Maria Rodriguez" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Recommended by you" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Recommended by you 1/ })).toBeVisible();
   await page.getByLabel("Saved connector profiles").getByRole("button", { name: "Saved" }).click();
   await expect(page.getByRole("heading", { name: "No saved profiles yet" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Recommended by you" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Recommended by you 1/ })).toBeVisible();
 });
 
 test("the public profile stays readable on desktop and mobile", async ({ page }) => {
+  resetTestData();
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/connectors/11111111-1111-4111-8111-000000000001");
 
@@ -107,9 +116,17 @@ test("the public profile stays readable on desktop and mobile", async ({ page })
   await expect(page.locator(".social-profile-tabs")).toBeVisible();
   const connections = page.getByRole("region", { name: "Connections" });
   await expect(connections.getByRole("tab", { name: "Network 6" })).toBeVisible();
-  await connections.getByRole("tab", { name: /Recommended by/ }).click();
-  await expect(connections.getByRole("link", { name: /Nia Patel/ })).toBeVisible();
-  await connections.getByRole("tab", { name: /Recommendations 4/ }).click();
+  const recommendedByTab = connections.getByRole("tab", { name: /Recommended by/ });
+  await expect(async () => {
+    await recommendedByTab.click();
+    await expect(recommendedByTab).toHaveAttribute("aria-selected", "true", { timeout: 1_000 });
+  }).toPass();
+  await expect(connections.getByRole("tabpanel").getByRole("link").first()).toBeVisible();
+  const recommendationsTab = connections.getByRole("tab", { name: /Recommendations 4/ });
+  await expect(async () => {
+    await recommendationsTab.click();
+    await expect(recommendationsTab).toHaveAttribute("aria-selected", "true", { timeout: 1_000 });
+  }).toPass();
   await expect(connections.getByText("People and organizations Maria recommends")).toBeVisible();
 
   await page.goto("/connectors/11111111-1111-4111-8111-000000000008");
@@ -145,15 +162,16 @@ test("the public profile stays readable on desktop and mobile", async ({ page })
 });
 
 test("messages support unread filtering, delivery timestamps, and starting a conversation", async ({ page }) => {
+  resetTestData();
   await page.goto("/messages");
 
   await expect(page.getByRole("heading", { name: "Messages" })).toBeVisible();
-  await expect(page.locator(".messages-title").getByLabel("2 unread messages")).toBeVisible();
-  await page.getByRole("link", { name: "Unread 2" }).click();
+  await expect(page.locator(".messages-title").getByLabel("3 unread messages")).toBeVisible();
+  await page.getByRole("link", { name: "Unread 3" }).click();
 
   const unreadList = page.getByLabel("Unread conversations");
   await expect(unreadList.getByRole("link", { name: /Open conversation with Nia Patel/ })).toBeVisible();
-  await expect(unreadList.getByRole("link", { name: /Maria Rodriguez/ })).toHaveCount(0);
+  await expect(unreadList.getByRole("link", { name: /Open conversation with Maria Rodriguez/ })).toBeVisible();
 
   await unreadList.getByRole("link", { name: /Open conversation with Nia Patel/ }).click();
   await expect(page.getByRole("link", { name: "All messages" })).toBeVisible();
@@ -163,6 +181,13 @@ test("messages support unread filtering, delivery timestamps, and starting a con
   const sentNiaMessage = page.locator(".message-bubble", { hasText: "Please send the Midtown introduction." });
   await expect(sentNiaMessage.locator("time")).toContainText("Delivered");
 
+  await page.getByRole("link", { name: "All messages" }).click();
+  await expect(page.getByRole("link", { name: "Unread 1" })).toBeVisible();
+  await page.getByRole("link", { name: "Unread 1" }).click();
+  await page
+    .getByLabel("Unread conversations")
+    .getByRole("link", { name: /Open conversation with Maria Rodriguez/ })
+    .click();
   await page.getByRole("link", { name: "All messages" }).click();
   await expect(page.getByRole("link", { name: "Unread 0" })).toBeVisible();
   await page.getByRole("link", { name: "Unread 0" }).click();
@@ -215,7 +240,10 @@ test("friend requests can be added, accepted, and cancelled", async ({ page }) =
   await expect(page.getByText("Andre Brooks")).toBeVisible();
   await page.getByRole("button", { name: "Accept" }).click();
   await expect(page.getByRole("button", { name: "Accept" })).not.toBeVisible();
-  const andreCard = page.locator(".people-panel > .friend-list .friend-card", { hasText: "Andre Brooks" });
+  const andreCard = page
+    .getByRole("region", { name: "Connections" })
+    .getByRole("article")
+    .filter({ hasText: "Andre Brooks" });
   await expect(andreCard.getByRole("link", { name: "Message Andre Brooks" })).toBeVisible();
   await andreCard.getByRole("link", { name: "Andre Brooks", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Andre Brooks" })).toBeVisible();

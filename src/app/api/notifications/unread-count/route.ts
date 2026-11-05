@@ -15,7 +15,9 @@ export async function GET() {
   try {
     const notifications = await getNotifications(user);
     return NextResponse.json({
-      count: notifications.filter((notification) => !notification.isRead).length,
+      count: notifications
+        .filter((notification) => !notification.isRead)
+        .reduce((total, notification) => total + notification.groupCount, 0),
     });
   } catch {
     return NextResponse.json({ count: 0 });

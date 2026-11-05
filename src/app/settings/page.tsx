@@ -186,22 +186,17 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                   <p>Receive selected notifications at your account email.</p>
                 </div>
               </div>
-              <label className="settings-row settings-email-row">
-                <span className="settings-row-icon"><Mail aria-hidden="true" size={18} /></span>
-                <span className="settings-row-copy">
-                  <strong>Email notifications</strong>
-                  <small>Turn email delivery on or off.</small>
-                </span>
-                <input defaultChecked={preferences.emailNotifications} name="emailNotifications" type="checkbox" />
-                <span aria-hidden="true" className="settings-toggle" />
-              </label>
               <label className="settings-digest-row">
                 <span className="settings-row-icon"><Clock3 aria-hidden="true" size={18} /></span>
                 <span className="settings-row-copy">
-                  <strong>Digest frequency</strong>
-                  <small>Choose how often notification emails arrive.</small>
+                  <strong>Email schedule</strong>
+                  <small>Choose whether and how often notification emails arrive.</small>
                 </span>
-                <select defaultValue={preferences.digestFrequency} name="digestFrequency">
+                <select
+                  defaultValue={preferences.emailNotifications ? preferences.digestFrequency : "off"}
+                  name="digestSchedule"
+                >
+                  <option value="off">Off</option>
                   <option value="immediate">As activity happens</option>
                   <option value="daily">Daily digest</option>
                   <option value="weekly">Weekly digest</option>

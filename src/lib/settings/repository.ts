@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { getLocalDataPath, writeLocalJson } from "@/lib/local-data";
+import { clearLocalNotificationReadState } from "@/lib/notifications/read-state";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -278,6 +279,7 @@ export async function markAllNotificationsRead(user?: User | null) {
       notificationsReadAt: readAt,
     };
     await writeLocalJson(LOCAL_SETTINGS_PATH, store);
+    await clearLocalNotificationReadState(userId);
     return readAt;
   }
 

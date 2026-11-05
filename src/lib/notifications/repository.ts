@@ -5,6 +5,10 @@ import { getFriendsDashboard } from "@/lib/friends/repository";
 import { getLocalDataPath } from "@/lib/local-data";
 import { getDirectConversationSummaries } from "@/lib/messages/repository";
 import {
+  getLocalNotificationReadState,
+  setLocalNotificationsRead,
+} from "@/lib/notifications/read-state";
+import {
   getNotificationPreferences,
   type NotificationPreferences,
 } from "@/lib/settings/repository";
@@ -13,6 +17,9 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export type NotificationItem = {
+  eventIds: string[];
+  groupCount: number;
+  groupKey?: string;
   id: string;
   type: "friend" | "recommendation" | "comment" | "mention" | "message";
   title: string;
@@ -20,6 +27,16 @@ export type NotificationItem = {
   href: string;
   createdAt: string;
   isRead: boolean;
+  postId?: string;
+};
+
+type NotificationCandidate = Omit<
+  NotificationItem,
+  "eventIds" | "groupCount" | "isRead"
+> & {
+  eventIds?: string[];
+  groupKey?: string;
+  isRead?: boolean;
 };
 
 type MemberProfile = {
@@ -81,22 +98,70 @@ function filterByPreferences(
 }
 
 function prepareNotifications(
-  notifications: Omit<NotificationItem, "isRead">[],
+  notifications: NotificationCandidate[],
   preferences: NotificationPreferences,
+  readOverrides?: { readIds: string[]; unreadIds: string[] },
 ) {
   const readAt = preferences.notificationsReadAt
     ? new Date(preferences.notificationsReadAt).getTime()
     : Number.NaN;
+  const readIds = new Set(readOverrides?.readIds ?? []);
+  const unreadIds = new Set(readOverrides?.unreadIds ?? []);
 
-  return filterByPreferences(
+  const prepared = filterByPreferences(
     notifications.map((notification) => ({
       ...notification,
-      isRead:
-        Number.isFinite(readAt) &&
-        new Date(notification.createdAt).getTime() <= readAt,
+      eventIds: notification.eventIds ?? [],
+      groupCount: 1,
+      isRead: unreadIds.has(notification.id)
+        ? false
+        : readIds.has(notification.id)
+          ? true
+          : notification.isRead ?? (
+            Number.isFinite(readAt) &&
+            new Date(notification.createdAt).getTime() <= readAt
+          ),
     })),
     preferences,
   )
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+  const groups = new Map<string, NotificationItem[]>();
+  prepared.forEach((notification) => {
+    const key = `${notification.type}:${notification.groupKey ?? notification.id}`;
+    groups.set(key, [...(groups.get(key) ?? []), notification]);
+  });
+
+  return Array.from(groups.values())
+    .map((items) => {
+      const first = items[0];
+      if (items.length === 1) return first;
+
+      const actorNames = Array.from(new Set(items.map((item) =>
+        item.title.replace(/ (accepted|commented|mentioned|recommended|replied|sent).*$/i, ""),
+      )));
+      const actorLabel = actorNames.length === 1
+        ? actorNames[0]
+        : `${actorNames[0]} and ${actorNames.length - 1} ${actorNames.length === 2 ? "other" : "others"}`;
+      const title = first.type === "message"
+        ? `${actorLabel} sent you ${items.length} messages`
+        : first.type === "recommendation"
+          ? `${actorLabel} recommended your profile`
+          : first.type === "mention"
+            ? `${actorLabel} mentioned you`
+            : first.type === "comment"
+              ? `${actorLabel} replied to a conversation`
+              : first.title;
+
+      return {
+        ...first,
+        detail: `${items.length} updates. Latest: ${first.detail}`,
+        eventIds: items.flatMap((item) => item.eventIds),
+        groupCount: items.length,
+        isRead: items.every((item) => item.isRead),
+        title,
+      };
+    })
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .slice(0, 40);
 }
@@ -113,7 +178,7 @@ async function getLocalNotifications(user?: User | null): Promise<NotificationIt
     ...suppressedUsers.blockedIds,
     ...suppressedUsers.mutedIds,
   ]);
-  const notifications: Omit<NotificationItem, "isRead">[] = [];
+  const notifications: NotificationCandidate[] = [];
 
   dashboard.incomingRequests.forEach((friend) => {
     if (hiddenNotificationActors.has(friend.id)) return;
@@ -147,6 +212,7 @@ async function getLocalNotifications(user?: User | null): Promise<NotificationIt
       detail: recommendation.note,
       href: `/connectors/${recommendation.connector.id}`,
       createdAt: recommendation.createdAt,
+      groupKey: `recommendation:${recommendation.connector.id}`,
     });
   });
 
@@ -164,6 +230,7 @@ async function getLocalNotifications(user?: User | null): Promise<NotificationIt
         detail: conversation.lastMessage,
         href: `/messages/${conversation.recipientId}`,
         createdAt: conversation.updatedAt,
+        groupKey: `message:${conversation.recipientMemberId}`,
       });
     });
 
@@ -192,6 +259,7 @@ async function getLocalNotifications(user?: User | null): Promise<NotificationIt
             detail: recommendation.note,
             href: `/connectors/${ownedProfileId}`,
             createdAt: recommendation.created_at,
+            groupKey: `recommendation:${ownedProfileId}`,
           });
         });
     } catch (error) {
@@ -256,6 +324,8 @@ async function getLocalNotifications(user?: User | null): Promise<NotificationIt
           detail: `${postTitles.get(comment.post_id) ?? "Community post"}: ${comment.body}`,
           href: `/forum#comment-${comment.id}`,
           createdAt: comment.created_at,
+          groupKey: `forum-comment:${comment.post_id}`,
+          postId: comment.post_id,
         });
       });
 
@@ -276,6 +346,8 @@ async function getLocalNotifications(user?: User | null): Promise<NotificationIt
             ? `/forum#comment-${mention.comment_id}`
             : `/forum#post-${mention.post_id}`,
           createdAt: mention.created_at,
+          groupKey: `forum-mention:${mention.post_id}`,
+          postId: mention.post_id,
         });
       });
   } catch (error) {
@@ -284,7 +356,11 @@ async function getLocalNotifications(user?: User | null): Promise<NotificationIt
     }
   }
 
-  return prepareNotifications(notifications, preferences);
+  notifications.forEach((notification) => {
+    notification.eventIds = [notification.id];
+  });
+  const readOverrides = await getLocalNotificationReadState(user?.id ?? LOCAL_DEMO_USER_ID);
+  return prepareNotifications(notifications, preferences, readOverrides);
 }
 
 export async function getNotifications(user?: User | null): Promise<NotificationItem[]> {
@@ -297,6 +373,59 @@ export async function getNotifications(user?: User | null): Promise<Notification
   }
 
   const supabase = await createClient();
+  const [eventResult, eventPreferences, eventSuppressedUsers, eventSubscriptionResult] = await Promise.all([
+    supabase
+      .from("notification_events")
+      .select("id, actor_id, kind, title, detail, href, group_key, read_at, created_at")
+      .eq("recipient_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(120),
+    getNotificationPreferences(user),
+    getSuppressedUserIds(user),
+    supabase
+      .from("forum_post_subscriptions")
+      .select("post_id, status")
+      .eq("user_id", user.id)
+      .eq("status", "muted"),
+  ]);
+
+  if (!eventResult.error && !eventSubscriptionResult.error && eventResult.data?.length) {
+    const hiddenActors = new Set([
+      ...eventSuppressedUsers.blockedIds,
+      ...eventSuppressedUsers.mutedIds,
+    ]);
+    const mutedPostIds = new Set(
+      (eventSubscriptionResult.data ?? []).map((subscription) => subscription.post_id),
+    );
+    const checkpoint = eventPreferences.notificationsReadAt
+      ? new Date(eventPreferences.notificationsReadAt).getTime()
+      : Number.NaN;
+    const candidates: NotificationCandidate[] = eventResult.data
+      .filter((event) => !event.actor_id || !hiddenActors.has(event.actor_id))
+      .map((event) => {
+        const postId = event.group_key.startsWith("forum-")
+          ? event.group_key.split(":").slice(1).join(":")
+          : undefined;
+        return {
+          id: event.id,
+          eventIds: [event.id],
+          type: event.kind as NotificationItem["type"],
+          title: event.title,
+          detail: event.detail,
+          href: event.href,
+          createdAt: event.created_at,
+          groupKey: event.group_key,
+          isRead: Boolean(event.read_at) || (
+            Number.isFinite(checkpoint) && new Date(event.created_at).getTime() <= checkpoint
+          ),
+          postId,
+        };
+      })
+      .filter((event) => !event.postId || !mutedPostIds.has(event.postId));
+
+    return prepareNotifications(candidates, eventPreferences);
+  }
+
   const [
     friendshipResult,
     recommendationResult,
@@ -522,7 +651,7 @@ export async function getNotifications(user?: User | null): Promise<Notification
   const postTitles = new Map(
     (relatedPostResult.data ?? ownPosts).map((post) => [post.id, post.title]),
   );
-  const notifications: Omit<NotificationItem, "isRead">[] = [];
+  const notifications: NotificationCandidate[] = [];
 
   friendships.forEach((friendship) => {
     const friendId =
@@ -624,4 +753,43 @@ export async function getNotifications(user?: User | null): Promise<Notification
     });
 
   return prepareNotifications(notifications, preferences);
+}
+
+export async function setNotificationsRead(
+  notificationIds: string[],
+  shouldBeRead: boolean,
+  user?: User | null,
+) {
+  const uniqueIds = Array.from(new Set(notificationIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return 0;
+
+  if (!isSupabaseConfigured()) {
+    await setLocalNotificationsRead(
+      user?.id ?? LOCAL_DEMO_USER_ID,
+      uniqueIds,
+      shouldBeRead,
+    );
+    return uniqueIds.length;
+  }
+
+  if (!user) {
+    throw new Error("Sign in before updating notifications.");
+  }
+
+  const uuidIds = uniqueIds.filter((id) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id),
+  );
+  if (uuidIds.length === 0) return 0;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("set_notification_read", {
+    target_notification_ids: uuidIds,
+    should_be_read: shouldBeRead,
+  });
+
+  if (error) {
+    throw new Error(`Could not update notifications: ${error.message}`);
+  }
+
+  return data;
 }

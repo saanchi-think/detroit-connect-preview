@@ -48,7 +48,7 @@ test("home AI search understands explicit profile constraints without exposing s
   await expect(page.locator(".ai-intent-row")).toContainText("Southwest Detroit");
   await expect(page.locator(".ai-intent-row")).toContainText("Spanish");
   await expect(page.locator(".ai-connector-list .profile-snapshot")).toHaveCount(1);
-  await expect(page.getByRole("heading", { name: "Maria Rodriguez" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Maria Rodriguez", exact: true })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Sources" })).toHaveCount(0);
   await expect(page.locator(".ai-inline-citation")).toHaveCount(0);
 });
@@ -84,15 +84,17 @@ test("profile personalization improves broad searches without overriding explici
 
   await page.goto("/search?q=Who+might+be+a+good+fit+for+me");
   const personalization = page.locator(".ai-personalization-control");
-  await expect(personalization).toContainText("Personalized with");
+  await expect(personalization).toContainText("Personalize matches using my profile");
+  await expect(personalization).toContainText("Using");
   await expect(personalization).toContainText("Southwest Detroit");
   await expect(personalization).toContainText("Spanish");
   await expect(page.locator(".ai-connector-list .profile-snapshot")).not.toHaveCount(0);
 
-  await personalization.getByRole("link", { name: "Compare without" }).click();
+  await personalization
+    .getByRole("switch", { name: "Personalize matches using my profile" })
+    .uncheck();
   await expect(page).toHaveURL(/personalized=0/);
-  await expect(page.locator(".ai-personalization-control")).toContainText("Question only");
-  await expect(page.getByRole("heading", { name: "No clear match yet" })).toBeVisible();
+  await expect(page.locator(".ai-personalization-control")).toContainText("Off - ranking only by your question");
 
   await page.goto("/search?q=English+utilities+helper+in+Bagley");
   const firstExplicitMatch = page.locator(".ai-connector-list .profile-snapshot").first();
@@ -107,11 +109,11 @@ test("Network, profile sharing, profile activity, directory filters, and setting
   await expect(page.getByRole("region", { name: "Recommended by your network" })).toBeVisible();
 
   await page.goto("/connectors/11111111-1111-4111-8111-000000000001");
-  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByRole("button", { name: "Share profile" }).click();
   const shareDialog = page.getByRole("dialog", { name: "Share this profile" });
   await expect(shareDialog).toBeVisible();
   await expect(shareDialog.getByText("Send to your network")).toBeVisible();
-  await expect(shareDialog.getByRole("button", { name: /Message Nia Patel/ })).toBeVisible();
+  await expect(shareDialog.getByRole("button", { name: "Send this to Nia Patel" })).toBeVisible();
   await shareDialog.getByRole("button", { name: "Close share menu" }).click();
 
   await expect(page.getByRole("heading", { name: "Community posts" })).toBeVisible();

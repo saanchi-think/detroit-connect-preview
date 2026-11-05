@@ -70,7 +70,7 @@ NOTIFICATION_EMAIL_FROM="Detroit Connect <notifications@your-domain.com>"
 NOTIFICATION_CRON_SECRET=a-long-random-secret
 ```
 
-Run `supabase/migrations/0016_notification_delivery.sql` before enabling email delivery. It adds notification events, per-user email preferences, digest frequency, read state, and the `mark_all_notifications_read()` database function.
+Apply all migrations through `20260827143511_realtime_notification_controls.sql` before enabling delivery. The notification tables are protected by RLS, grouped by conversation or actor, individually readable/unreadable, and published through Supabase Realtime for signed-in recipients.
 
 Schedule a production cron job to call the digest endpoint every 15 minutes:
 
@@ -79,7 +79,7 @@ curl -X POST https://your-domain.com/api/notifications/digest \
   -H "Authorization: Bearer $NOTIFICATION_CRON_SECRET"
 ```
 
-The endpoint sends only users whose selected schedule is due: immediately, daily, or weekly. Email delivery is off by default and must be enabled by each user in Settings.
+The endpoint sends only users whose selected schedule is due: immediately, daily, or weekly. Email delivery is off by default and must be enabled by each user in Settings. Hosts that automatically send `Authorization: Bearer $CRON_SECRET` may use `CRON_SECRET` instead of `NOTIFICATION_CRON_SECRET`.
 
 ## Automatic AI search indexing
 

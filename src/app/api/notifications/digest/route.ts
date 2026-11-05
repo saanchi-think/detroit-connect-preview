@@ -4,7 +4,7 @@ import { deliverNotificationEmails } from "@/lib/notifications/email-delivery";
 export const dynamic = "force-dynamic";
 
 async function deliver(request: NextRequest) {
-  const secret = process.env.NOTIFICATION_CRON_SECRET;
+  const secret = process.env.NOTIFICATION_CRON_SECRET ?? process.env.CRON_SECRET;
   const authorization = request.headers.get("authorization");
 
   if (!secret || authorization !== `Bearer ${secret}`) {

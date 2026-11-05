@@ -7,6 +7,7 @@ import { MessageComposer } from "@/components/message-composer";
 import { MessageForwardButton } from "@/components/message-forward-button";
 import { MessageReactionControl } from "@/components/message-reaction-control";
 import { ReportContentMenu } from "@/components/report-content-menu";
+import { RealtimePageRefresh } from "@/components/realtime-page-refresh";
 import { getCurrentUser } from "@/lib/auth/user";
 import { setDirectConversationArchivedAction } from "@/lib/messages/actions";
 import {
@@ -62,6 +63,7 @@ export default async function MessagePage({ params, searchParams }: MessagePageP
   return (
     <main className="page-shell messages-page message-conversation-page">
       <AppHeader />
+      <RealtimePageRefresh eventName="messages" />
       <section className="message-thread" aria-label={`Conversation with ${conversation.profile.name}`}>
         <header className="message-thread-header">
           <Link className="message-back" href="/messages">

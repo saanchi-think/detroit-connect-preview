@@ -1,6 +1,7 @@
 import { Archive, ArchiveRestore, MessageCircle, SquarePen, Users } from "lucide-react";
 import Link from "next/link";
 import { AppHeader } from "@/components/app-header";
+import { RealtimePageRefresh } from "@/components/realtime-page-refresh";
 import { getCurrentUser } from "@/lib/auth/user";
 import { getFriendsDashboard } from "@/lib/friends/repository";
 import { setDirectConversationArchivedAction } from "@/lib/messages/actions";
@@ -52,6 +53,7 @@ export default async function MessagesPage({ searchParams }: MessagesPageProps) 
   return (
     <main className="page-shell messages-page">
       <AppHeader />
+      <RealtimePageRefresh eventName="messages" />
       <section className="page-hero compact messages-hero">
         <div className="messages-title">
           <h1>Messages</h1>

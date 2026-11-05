@@ -1099,6 +1099,7 @@ export type Database = {
           created_at: string
           detail: string
           email_sent_at: string | null
+          group_key: string
           href: string
           id: string
           kind: string
@@ -1113,6 +1114,7 @@ export type Database = {
           created_at?: string
           detail?: string
           email_sent_at?: string | null
+          group_key?: string
           href?: string
           id?: string
           kind: string
@@ -1127,6 +1129,7 @@ export type Database = {
           created_at?: string
           detail?: string
           email_sent_at?: string | null
+          group_key?: string
           href?: string
           id?: string
           kind?: string
@@ -1357,6 +1360,13 @@ export type Database = {
       mark_all_notifications_read: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      set_notification_read: {
+        Args: {
+          should_be_read: boolean
+          target_notification_ids: string[]
+        }
+        Returns: number
       }
       members_are_connected: {
         Args: { first_user_id: string; second_user_id: string }

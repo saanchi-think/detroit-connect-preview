@@ -2157,6 +2157,7 @@ a:focus-visible {
 }
 
 .ai-personalization-switch {
+  position: relative;
   display: inline-flex;
   flex: 0 0 auto;
   cursor: pointer;
@@ -2164,17 +2165,20 @@ a:focus-visible {
 
 .ai-personalization-switch input {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+  opacity: 0;
 }
 
 .ai-personalization-switch-track {
   position: relative;
   width: 38px;
   height: 22px;
+  pointer-events: none;
   border: 1px solid var(--color-border-strong);
   border-radius: 999px;
   background: #dce5e8;
@@ -2954,6 +2958,14 @@ a:focus-visible {
   border-radius: 7px;
   background: var(--color-surface);
   box-shadow: 0 14px 32px rgba(21, 47, 58, 0.15);
+}
+
+.profile-safety-menu:not([open]) > .profile-safety-popover,
+.profile-report-form:not([open]) > form,
+.report-content-menu:not([open]) > form,
+.connector-profile-page .profile-friend-control:not([open]) > form,
+.connector-profile-page .profile-recommend-control:not([open]) > form {
+  display: none;
 }
 
 .report-content-menu label {

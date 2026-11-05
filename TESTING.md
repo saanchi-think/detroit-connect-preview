@@ -31,18 +31,19 @@ Run these against a separate Supabase staging project, in two browser profiles:
 5. Send messages in both directions and confirm unread/read state and delivery timestamps.
 6. Publish a forum post with three images, an independent comment, and a threaded reply from the other account.
 7. Edit the new comment within two minutes and confirm editing is unavailable after the window closes.
-8. Confirm connection, recommendation, comment, reply, and message notifications appear for the correct account.
-9. Change notification preferences and confirm disabled notification categories are suppressed.
-10. Remove the connection and confirm both accounts lose network-only relationship state.
-11. Configure `OPENAI_API_KEY`, index an approved source, and confirm a factual search answer cites it.
+8. Keep both accounts open and confirm connection, recommendation, comment, reply, mention, share, and message notifications appear live for the correct account without refreshing.
+9. Mark one notification read and unread, mark all read, mute a forum conversation, and confirm grouped updates and badges change immediately.
+10. Change in-app categories and the email schedule, then invoke the protected digest endpoint with a staging Resend sender and confirm only due events are delivered.
+11. Remove the connection and confirm both accounts lose network-only relationship state.
+12. Configure `OPENAI_API_KEY`, index an approved source, and confirm a factual search answer cites it.
 
 ## Remaining limits and product gaps
 
 - The automated two-person journey simulates the second person by updating isolated fixtures. Google sign-in, Supabase row-level security, and both sides of the workflow still need the two-account staging run above.
-- New messages and notifications appear after navigation or refresh; Supabase Realtime subscriptions are not implemented.
+- Realtime subscriptions, grouping, unread badges, per-item read state, mark-all-read, and forum-thread mute controls are implemented. A real two-account staging pass is still required to prove provider delivery and RLS boundaries in the client project.
 - AI synthesis and semantic source retrieval require `OPENAI_API_KEY` plus migration `0012_ai_knowledge_search.sql`; without them, the same interface uses deterministic public-profile matching.
 - Approved website/file extraction and indexing still require an administrator ingestion workflow before client launch.
-- Notifications do not yet have persisted read/unread state, a notification badge, or mark-all-read controls.
+- Email delivery requires a verified Resend sending domain, server-only keys, and a production scheduler; automated tests verify endpoint protection but cannot prove external inbox delivery without those client-owned credentials.
 - Recommendations can be updated by recommending the same profile again, but there is no explicit remove-recommendation control.
 - Comments can be edited for two minutes. Forum posts cannot yet be edited or deleted, and posts/comments cannot yet be reported or moderated.
 - Native share, email, SMS, and WhatsApp handoffs depend on the browser and operating system; automated tests cover the in-app DM and clipboard paths.

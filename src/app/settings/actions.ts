@@ -20,7 +20,9 @@ export async function saveSettingsAction(formData: FormData) {
 
   try {
     const currentPreferences = await getNotificationPreferences(user);
-    const requestedDigestFrequency = String(formData.get("digestFrequency") ?? "daily");
+    const requestedDigestFrequency = String(
+      formData.get("digestSchedule") ?? formData.get("digestFrequency") ?? "off",
+    );
     const digestFrequency =
       requestedDigestFrequency === "immediate" || requestedDigestFrequency === "weekly"
         ? requestedDigestFrequency
@@ -30,7 +32,7 @@ export async function saveSettingsAction(formData: FormData) {
       {
         connectionRequests: formData.get("connectionRequests") === "on",
         directMessages: formData.get("directMessages") === "on",
-        emailNotifications: formData.get("emailNotifications") === "on",
+        emailNotifications: requestedDigestFrequency !== "off",
         digestFrequency,
         forumReplies: formData.get("forumReplies") === "on",
         notificationsReadAt: currentPreferences.notificationsReadAt,

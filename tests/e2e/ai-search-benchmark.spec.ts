@@ -50,7 +50,7 @@ test("representative benchmark questions render the expected connectors", async 
     await page.goto(`/search?q=${encodeURIComponent(scenario.query)}`);
     await expect(page.locator(".ai-answer-panel"), scenario.id).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: scenario.connector! }),
+      page.getByRole("heading", { name: scenario.connector!, exact: true }),
       scenario.id,
     ).toBeVisible();
     await expect(page.getByRole("complementary", { name: "Sources" })).toHaveCount(0);

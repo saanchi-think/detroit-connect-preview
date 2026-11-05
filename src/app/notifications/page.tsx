@@ -1,8 +1,14 @@
 import Link from "next/link";
-import { BellRing, CheckCheck, Settings } from "lucide-react";
+import { BellOff, BellRing, CheckCheck, MoreHorizontal, Settings } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
-import { markAllNotificationsReadAction } from "@/app/notifications/actions";
+import {
+  markAllNotificationsReadAction,
+  openNotificationAction,
+  setNotificationReadAction,
+} from "@/app/notifications/actions";
+import { RealtimePageRefresh } from "@/components/realtime-page-refresh";
 import { getCurrentUser } from "@/lib/auth/user";
+import { toggleForumPostMuteAction } from "@/lib/forum/actions";
 import { getNotifications } from "@/lib/notifications/repository";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -24,7 +30,7 @@ function formatNotificationTime(createdAt: string) {
 }
 
 type NotificationsPageProps = {
-  searchParams: Promise<{ error?: string; read?: string }>;
+  searchParams: Promise<{ error?: string; muted?: string; read?: string }>;
 };
 
 export default async function NotificationsPage({ searchParams }: NotificationsPageProps) {
@@ -33,6 +39,10 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
   const needsSignIn = isSupabaseConfigured() && !user;
   const notifications = needsSignIn ? [] : await getNotifications(user);
   const unreadNotifications = notifications.filter((notification) => !notification.isRead);
+  const unreadNotificationCount = unreadNotifications.reduce(
+    (total, notification) => total + notification.groupCount,
+    0,
+  );
   const earlierNotifications = notifications.filter((notification) => notification.isRead);
   const groups = [
     { id: "new", label: "New", items: unreadNotifications },
@@ -42,12 +52,13 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
   return (
     <main className="page-shell notifications-page">
       <AppHeader />
+      <RealtimePageRefresh eventName="notifications" />
       <section className="page-hero compact notifications-hero">
         <div className="notifications-title">
           <h1>Notifications</h1>
-          {unreadNotifications.length > 0 ? (
-            <span aria-label={`${unreadNotifications.length} unread notifications`}>
-              {unreadNotifications.length}
+          {unreadNotificationCount > 0 ? (
+            <span aria-label={`${unreadNotificationCount} unread notifications`}>
+              {unreadNotificationCount}
             </span>
           ) : null}
         </div>
@@ -68,6 +79,7 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
 
       {params.error ? <p className="page-notice is-error" role="alert">{params.error}</p> : null}
       {params.read === "all" ? <p className="page-notice" role="status">All notifications marked as read.</p> : null}
+      {params.muted === "1" ? <p className="page-notice" role="status">Conversation muted.</p> : null}
 
       {needsSignIn ? (
         <section className="empty-panel notification-empty">
@@ -83,25 +95,63 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
                 <span>{group.items.length}</span>
               </header>
               <div>
-                {group.items.map((notification) => (
-                  <Link
-                    className={`notification-item${notification.isRead ? "" : " is-unread"}`}
-                    href={notification.href}
-                    key={notification.id}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`notification-mark is-${notification.type}`}
-                    />
-                    <span className="notification-copy">
-                      <strong>{notification.title}</strong>
-                      <span>{notification.detail}</span>
-                    </span>
-                    <time dateTime={notification.createdAt}>
-                      {formatNotificationTime(notification.createdAt)}
-                    </time>
-                  </Link>
-                ))}
+                {group.items.map((notification) => {
+                  const serializedIds = JSON.stringify(notification.eventIds);
+                  return (
+                    <article
+                      className={`notification-row${notification.isRead ? "" : " is-unread"}`}
+                      key={notification.id}
+                    >
+                      <form action={openNotificationAction} className="notification-open-form">
+                        <input name="href" type="hidden" value={notification.href} />
+                        <input name="notificationIds" type="hidden" value={serializedIds} />
+                        <button className="notification-item" type="submit">
+                          <span
+                            aria-hidden="true"
+                            className={`notification-mark is-${notification.type}`}
+                          />
+                          <span className="notification-copy">
+                            <strong>{notification.title}</strong>
+                            <span>{notification.detail}</span>
+                          </span>
+                          <time dateTime={notification.createdAt}>
+                            {formatNotificationTime(notification.createdAt)}
+                          </time>
+                        </button>
+                      </form>
+                      {notification.eventIds.length > 0 || notification.postId ? (
+                        <details className="notification-menu">
+                          <summary aria-label={`More actions for ${notification.title}`} title="More actions">
+                            <MoreHorizontal aria-hidden="true" size={18} />
+                          </summary>
+                          <div>
+                            {notification.eventIds.length > 0 ? (
+                              <form action={setNotificationReadAction}>
+                                <input name="notificationIds" type="hidden" value={serializedIds} />
+                                <input name="read" type="hidden" value={notification.isRead ? "false" : "true"} />
+                                <input name="returnTo" type="hidden" value="/notifications" />
+                                <button type="submit">
+                                  <CheckCheck aria-hidden="true" size={15} />
+                                  Mark as {notification.isRead ? "unread" : "read"}
+                                </button>
+                              </form>
+                            ) : null}
+                            {notification.postId ? (
+                              <form action={toggleForumPostMuteAction}>
+                                <input name="postId" type="hidden" value={notification.postId} />
+                                <input name="returnTo" type="hidden" value="/notifications?muted=1" />
+                                <button type="submit">
+                                  <BellOff aria-hidden="true" size={15} />
+                                  Mute this conversation
+                                </button>
+                              </form>
+                            ) : null}
+                          </div>
+                        </details>
+                      ) : null}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ))}

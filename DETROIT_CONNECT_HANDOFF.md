@@ -1,512 +1,178 @@
 # Detroit Connect Project Handoff
 
-Last updated: July 24, 2026
+Last updated: November 5, 2026
 
-This file is the continuation guide for a new ChatGPT/Codex session. It contains
-no passwords, API keys, OAuth secrets, or private user data.
+This document is the starting point for the next developer. It intentionally
+contains no passwords, API keys, OAuth secrets, or private user data.
 
-## Start Here
+## Project Location
 
-The active application is:
+- Local repository: `/Users/saanchiagarwal/Desktop/Think Projects/detroit-connect-app`
+- GitHub: `https://github.com/saanchi-think/detroit-connect-preview`
+- Active branch: `codex/desktop-migration`
+- Public deployment: not yet configured
 
-`/Users/saanchiagarwal/Documents/Think Technologies/detroit-connect-app`
+After cloning the repository and starting the app, a developer can open
+`http://localhost:5200` on that same computer. This is not a public website URL
+and will not work for a client or another developer until they run the project
+locally. Use the GitHub link above to transfer the code; add the production URL
+here after deployment.
 
-Do not continue development in the older HTML experiment folders. They are
-visual history and references, not the production application.
-
-Before changing code:
-
-1. Read `AGENTS.md`.
-2. Read this file and `README.md`.
-3. Run `git status --short`.
-4. Run the app at `http://localhost:5200`.
-5. Confirm the current page visually before making design changes.
-6. Preserve accepted design and copy unless the user explicitly asks to
-   experiment.
+Before changing code, read `AGENTS.md`, this file, `README.md`, and
+`TESTING.md`, then run `git status --short`.
 
 ## Product Summary
 
-Detroit Connect is a relationship-based community directory for people moving
-to or living in Detroit.
+Detroit Connect is a community platform for people moving to or living in
+Detroit. It includes:
 
-Users should be able to:
+- Public connector profiles and relationship-based recommendations.
+- Network requests, accepted connections, and direct messages.
+- Community forum posts, comments, replies, likes, sharing, and moderation
+  controls.
+- Saved profiles, places, and community posts.
+- An interactive Detroit neighborhood map.
+- In-app notifications, notification preferences, and optional email digests.
+- Natural-language search across public profiles and approved community data.
+- A populated local preview account for demonstrations without signing in.
 
-- Find individual helpers, vendors, and community organizations.
-- Search by the kind of help they need.
-- View detailed public connector profiles.
-- Save useful connector profiles.
-- Add friends and see their recommendations or past experiences.
-- Recommend connectors to accepted friends.
-- Ask questions, comment, and share posts in the Community Forum.
-- Explore Detroit neighborhoods and landmarks on an interactive map.
-- Create and manage their own connector profile.
-- Receive notifications about relevant network activity.
+## Technology
 
-The initial audience is approximately 200 users, with room to scale.
-
-## Product Principles
-
-- Easy to understand for adults and people who do not use the internet often.
-- Clear navigation, readable type, and familiar controls.
-- Minimal explanatory copy; avoid unnecessary subheaders and feature narration.
-- Modern, urban, polished, and Detroit-specific without becoming visually busy.
-- Warm and inviting, but still credible enough for a city or client-sponsored
-  platform.
-- Relationship signals should matter: friends, recommendations, and prior
-  experience are central to discovery.
-- Ask only for profile information that improves matching. Let users enrich
-  optional details later.
-
-## Approved Visual Direction
-
-The approved current theme is the clean editorial layout implemented in:
-
-- `src/app/approved-theme.css`
-- `src/components/app-header.tsx`
-- `src/app/page.tsx`
-
-Key visual decisions:
-
-- Permanent left navigation rail on desktop.
-- Compact top navigation plus bottom navigation on mobile.
-- White and very light gray page canvas.
-- Deep blue-green typography and navigation.
-- Restrained gold accents.
-- Square or lightly framed interface elements rather than soft pill-heavy UI.
-- Strong editorial typography with generous but controlled whitespace.
-- Detroit skyline image on the homepage.
-- Homepage search is the primary action.
-- Interior pages use controlled accent colors:
-  - Forum: muted red/coral.
-  - Friends: blue with restrained secondary accents.
-  - Favorites: gold.
-  - Notifications: muted purple.
-
-Do not restore the older floating capsule header, beige template, dark
-holographic homepage, or oversized photo-led hero. Those were earlier
-experiments that the user moved away from.
-
-## Main Navigation
-
-The shared navigation should remain consistent across all pages:
-
-1. Home
-2. Community Forum
-3. Explore Detroit
-4. Friends
-5. Favorites
-6. Notifications
-7. My Profile or Create Profile
-
-The shared navigation component is `src/components/app-header.tsx`.
-
-## Current Pages
-
-| Route | Purpose | Current state |
-| --- | --- | --- |
-| `/` | Editorial homepage and search entry | Built and approved |
-| `/login` | Email and Google authentication | Built |
-| `/connectors` | Browse and filter profiles | Built |
-| `/search` | Natural-language search with ranked profiles and citations | Built |
-| `/connectors/[id]` | Public connector profile | Built |
-| `/create-profile` | Extensive connector profile form | Built |
-| `/profile` | Redirect to the signed-in user's profile | Built |
-| `/favorites` | Saved connector profiles | Built |
-| `/friends` | Friend requests and recommendations | Built |
-| `/forum` | Posts, comments, and sharing | Built |
-| `/notifications` | Network activity | Built |
-| `/explore` | Interactive Detroit map | Built |
-| `/auth/callback` | Supabase OAuth callback | Built |
-
-## Important UX Decisions
-
-### Homepage Search
-
-The homepage search submits to `/search`. Natural-language intent parsing,
-constraint-aware connector ranking, citation display, and a collapsible source
-panel are implemented. With `OPENAI_API_KEY`, the server uses the OpenAI
-Responses API to synthesize an answer from public profiles and approved
-knowledge excerpts. Without the key, it uses deterministic profile matching
-and labels the result `Smart match`.
-
-### Profiles
-
-Profiles can represent:
-
-- Individual helpers.
-- Vendors or service providers.
-- Community organizations.
-
-Public profiles should emphasize:
-
-- Name and role.
-- Neighborhood.
-- Profile type.
-- Topics they can help with.
-- Languages.
-- Neighborhood expertise.
-- Availability.
-- Trust and verification information.
-- Friend recommendations or prior experience.
-
-Clicking a profile anywhere in results, Favorites, Friends, or Forum should
-lead to that person's public profile.
-
-### Favorites
-
-Favorites currently save connector profiles, not map locations.
-
-### Friends and Recommendations
-
-Friends are used to surface:
-
-- People a friend recommends.
-- Connectors a friend previously worked with.
-- Context explaining why the recommendation is relevant.
-
-Friend requests support send, accept, decline, and cancel workflows.
-
-### Community Forum
-
-Forum users can:
-
-- Select a topic.
-- Add a post title and details.
-- Publish a post.
-- View prior comments.
-- Add a comment.
-- Share a post link.
-
-Avoid adding extra explanatory headings or cluttering post actions.
-
-### Explore Detroit
-
-The Explore page uses Leaflet and a detailed street map. Neighborhood and
-landmark markers are visually distinct.
-
-Known issue: the heart symbols beside map results are decorative CSS and do not
-save anything. They currently create a false interactive affordance. Remove
-them unless a real Saved Places feature is being built.
-
-The existing Favorites page is for connector profiles. If Saved Places is
-added, it should be clearly separated from connector favorites.
-
-## Technology Stack
-
-- Next.js `16.2.10`
-- React `19.2.4`
+- Next.js 16.2.10 and React 19.2.4
 - TypeScript
-- Supabase Auth
-- Supabase Postgres
-- Supabase Row Level Security
-- `@supabase/ssr`
+- Supabase Auth, Postgres, Row Level Security, Storage, and Realtime
+- OpenAI Responses API and embeddings for AI search
+- Resend for optional notification email delivery
 - Leaflet for the Detroit map
-- Lucide React for interface icons
-- Zod for validation
-- ESLint
+- Playwright for end-to-end tests
 
-Package scripts:
+## Run Locally
 
 ```bash
-npm run dev
-npm run build
-npm run lint
-npm run check
-```
-
-Local development command:
-
-```bash
-cd "/Users/saanchiagarwal/Documents/Think Technologies/detroit-connect-app"
 npm install
 npm run dev -- -p 5200
 ```
 
-Local URL:
-
-`http://localhost:5200`
-
-## Application Modes
-
-The application has two explicit data modes.
-
-### Supabase Production Mode
-
-Used when the required public Supabase environment variables exist.
-
-- Authentication is real.
-- Connector profiles require an authenticated owner.
-- Favorites, friends, recommendations, forum posts, and comments persist in
-  Postgres.
-- RLS protects account and relationship data.
-- Failed writes should surface a real error.
-
-### Local Demo Mode
-
-Used when Supabase environment variables are absent.
-
-- Sample connector data and local JSON keep the visual interface usable.
-- It is for design and interface work only.
-- It is not a production or multi-user backend.
-
-Do not mistake successful demo-mode behavior for production backend
-verification.
-
-## Supabase Project
-
-Known project reference:
-
-`bhkbihvepgybjunajlzu`
-
-The local `.env.local` currently has all three expected variables set:
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `NEXT_PUBLIC_SITE_URL`
-
-Never commit `.env.local`, OAuth secrets, the service-role key, or user
-credentials.
-
-The app does not require the service-role key for normal user workflows.
-
-## Database Migrations
-
-Run migrations in numeric order:
-
-1. `supabase/migrations/0001_initial_schema.sql`
-2. `supabase/migrations/0002_friend_recommendations_rls.sql`
-3. `supabase/migrations/0003_friend_request_controls.sql`
-4. `supabase/migrations/0004_production_accounts.sql`
-5. `supabase/migrations/0005_backend_hardening.sql`
-
-Optional starter data:
-
-`supabase/seed.sql`
-
-Core tables and data surfaces:
-
-- `user_profiles`
-- `public_member_profiles`
-- `connector_profiles`
-- `favorite_profiles`
-- `friendships`
-- `profile_recommendations`
-- `forum_posts`
-- `forum_comments`
-
-Important backend behavior:
-
-- New auth users receive a `user_profiles` row through a database trigger.
-- `public_member_profiles` prevents private account fields from being exposed.
-- `find_member(search_term)` supports authenticated member lookup.
-- Friendship pairs and recommendations have uniqueness protection.
-- RLS policies distinguish public reads from user-owned mutations.
-- Forum authors can manage their own posts and comments.
-
-Database types live in `src/lib/database.types.ts`. Keep them aligned with the
-live Supabase schema whenever migrations change.
-
-## Authentication
-
-Supported authentication:
-
-- Email-based account flow.
-- Google OAuth through Supabase.
-
-Required Supabase URL configuration:
-
-- Local callback: `http://localhost:5200/auth/callback`
-- Production callback: `https://YOUR-DOMAIN/auth/callback`
-
-Google Cloud must contain the Supabase callback URL as an authorized redirect
-URI and the local/production app origins as authorized JavaScript origins.
-
-Google authentication and Supabase URL configuration were set up during the
-previous session. Reconfirm them after moving ownership, changing domains, or
-deploying.
-
-## Backend Code Map
-
-- `src/lib/supabase/client.ts`: browser Supabase client.
-- `src/lib/supabase/server.ts`: server Supabase client.
-- `src/lib/supabase/config.ts`: environment configuration check.
-- `src/lib/auth/user.ts`: current-user helpers.
-- `src/lib/connectors/repository.ts`: connector reads and profile ownership.
-- `src/lib/favorites/`: favorite actions and repository.
-- `src/lib/friends/`: friend and recommendation workflows.
-- `src/lib/forum/`: posts and comments.
-- `src/lib/notifications/repository.ts`: notification aggregation.
-- `src/app/create-profile/actions.ts`: profile form submission.
-- `src/app/login/actions.ts`: authentication actions.
-- `src/proxy.ts`: auth session refresh and request proxy behavior.
-
-## Verification Status
-
-The production app was added to Git in this checkpoint:
-
-`e18f0b0 Build production-ready Detroit Connect app`
-
-At that checkpoint:
-
-- `npm run lint` passed.
-- `npm run build` passed.
-- `npm run check` passed.
-- All application routes built successfully.
-- The approved theme was visually checked on Home, Forum, Friends, Explore, and
-  Create Profile.
-- Two-user relationship workflows were tested in the previous session.
-- Temporary relational QA records were removed after testing.
-
-Re-run the two-user workflow after account migration or deployment because
-OAuth domains, cookies, redirect URLs, and RLS behavior can differ from local
-testing.
-
-Two temporary auth test users may still exist in Supabase Auth. Review and
-delete them if they are no longer needed.
-
-## Two-User Test Checklist
-
-Use two separate browser sessions or browser profiles:
-
-1. Sign in as User A and User B.
-2. Confirm each auth account has a `user_profiles` row.
-3. Create one connector profile for each account.
-4. Confirm both public connector profiles are readable.
-5. Save and remove a favorite.
-6. Send a friend request from User A to User B.
-7. Accept it as User B.
-8. Confirm both users see the accepted friendship.
-9. Test decline and cancel with a fresh request if needed.
-10. Recommend a connector to the accepted friend.
-11. Confirm the recommendation appears in the friend's view.
-12. Publish a forum post.
-13. Confirm the public author name is correct.
-14. Add and read a comment.
-15. Confirm notifications and profile links point to the correct destination.
-16. Remove temporary QA records when finished.
-
-## Git State and Migration
-
-The Git repository root is:
-
-`/Users/saanchiagarwal/Documents/Think Technologies`
-
-The Detroit Connect app is a directory inside that repository. There is
-currently no Git remote configured.
-
-The workspace root contains unrelated files and uncommitted work. When staging
-Detroit Connect changes, scope commands to:
+To run the populated local preview without authentication:
 
 ```bash
-git add -- detroit-connect-app
-git status --short -- detroit-connect-app
+npm run seed:active-demo
+DETROIT_CONNECT_DATA_MODE=local \
+DETROIT_CONNECT_DATA_DIR=.active-demo-data \
+NEXT_PUBLIC_DETROIT_CONNECT_PREVIEW_ACCOUNT="Saanchi Agarwal" \
+npm run dev -- -p 5205
 ```
 
-Do not stage or revert unrelated workspace files.
+Never commit `.env.local` or any service credentials. Use `.env.example` as the
+configuration reference.
 
-For migration to a personal account:
+## Current Verified State
 
-1. Create a private personal GitHub repository.
-2. Add it as a remote.
-3. Push the committed history.
-4. Sign in to Codex with the personal ChatGPT Pro account.
-5. Clone or open the repository.
-6. Recreate `.env.local` securely.
-7. Reauthorize Supabase MCP and GitHub access.
-8. Confirm Supabase project ownership or invite the personal account.
-9. Re-run `npm install` and `npm run check`.
-10. Re-run the two-user test checklist.
+At this handoff checkpoint:
 
-## Current Gaps
+- `npm run lint` passes.
+- `npm run build` passes.
+- `npm run test:e2e -- --reporter=line` passes with 37 tests.
+- `git diff --check` passes.
 
-The following are not complete production features:
+The current interface follows the approved clean editorial direction in
+`src/app/approved-theme.css`: permanent desktop navigation, compact mobile
+navigation, white and light-gray surfaces, deep blue-green type, restrained
+gold accents, and controlled page-specific accent colors.
 
-- Homepage search is not yet connected to an LLM.
-- No file or website ingestion pipeline exists.
-- No semantic/vector search exists.
-- No cited AI answer interface exists.
-- No collapsible source panel exists.
-- There is no complete admin/moderation console.
-- Saved map locations are not implemented.
-- Production hosting and custom-domain deployment are not complete.
-- Automated browser end-to-end tests are not yet part of the repository.
-- Accessibility and responsive QA should be repeated before client launch.
+## Latest Notification Work
 
-## Recommended Next Build
+The latest implementation adds:
 
-The AI search vertical slice is built. The next production step is approved
-source ingestion and quality evaluation.
+- Canonical notification events grouped by conversation or actor.
+- Per-notification read and unread controls plus mark all as read.
+- Muted forum-thread filtering.
+- Recipient-scoped Supabase Realtime refresh for notifications and messages.
+- Live notification and message badges without a manual page refresh.
+- Email schedules for immediate, daily, weekly, or off.
+- Digest filtering for blocked users, muted users, and muted forum threads.
 
-Build it in this order:
+The corresponding migration is:
 
-1. Add approved knowledge sources:
-   - Uploaded client files.
-   - Approved client website URLs.
-2. Store documents and metadata in Supabase.
-3. Extract text and split it into traceable chunks.
-4. Apply migration `0012_ai_knowledge_search.sql` for embeddings and `pgvector` storage.
-5. Add source administration, re-indexing, and removal controls.
-6. Add retrieval and answer-quality evaluations for approved client content.
+`supabase/migrations/20260827143511_realtime_notification_controls.sql`
 
-Important AI-search guardrails:
+This migration has not yet been applied to the production Supabase project.
 
-- Never send private account fields to the model.
-- Keep connector permissions and RLS enforcement outside model prompting.
-- Preserve source IDs, URLs, titles, and chunk locations for citations.
-- Distinguish connector recommendations from factual client-resource answers.
-- Do not present an answer without showing where it came from.
-- Add a clear fallback when the approved sources do not contain the answer.
+## AI Search Status
 
-## Suggested Later Milestones
+The deterministic public-profile search and ranking fallback works. The full
+conversational answer path is configured for `gpt-5.6-terra`, but the current
+OpenAI API account reported that it had no credits remaining during the latest
+check. Add API credits before testing generated answers, follow-up memory,
+semantic retrieval, or automatic embedding updates.
 
-After AI search:
+The application must continue to work with its labeled `Smart match` fallback
+when OpenAI is unavailable. Do not send private account fields to the model.
 
-1. Admin and moderation tools.
-2. Production deployment and custom domain.
-3. Automated end-to-end tests.
-4. Accessibility and device QA.
-5. Analytics, monitoring, and error reporting.
-6. Data-retention and privacy documentation.
-7. Client acceptance testing.
+## Production Setup Still Required
 
-## Session Working Style
+1. Apply all Supabase migrations, including
+   `20260827143511_realtime_notification_controls.sql`.
+2. Configure the production site URL and Supabase public credentials.
+3. Configure the server-only notification credentials:
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `RESEND_API_KEY`
+   - `NOTIFICATION_EMAIL_FROM`
+   - `NOTIFICATION_CRON_SECRET`
+4. Schedule `POST /api/notifications/digest` every 15 minutes.
+5. Configure the AI search credentials and worker:
+   - `OPENAI_API_KEY`
+   - `OPENAI_SEARCH_MODEL`
+   - `OPENAI_EMBEDDING_MODEL`
+   - `SEARCH_INDEX_CRON_SECRET`
+6. Schedule `POST /api/search/index` every one to five minutes.
+7. Configure the production Supabase Auth site URL and callback URL.
+8. Verify the Resend sending domain.
+9. Deploy the application and run the manual staging checks in `TESTING.md`.
 
-The user prefers:
+## Required Staging Checks
 
-- Small, visible steps.
-- Scope first when a direction is still open.
-- Direct implementation once direction is agreed.
-- Named experiments when comparing design options.
-- Explicit permission before replacing an accepted design.
-- No unnecessary text or decorative interface clutter.
-- Browser-visible verification after frontend changes.
-- Exact commits at meaningful milestones.
+Use two real accounts in separate browser profiles to verify:
 
-When the user says a version is approved, preserve it. Do not silently replace
-accepted copy, navigation, layouts, or imagery during unrelated work.
+1. Sign-up and OAuth callbacks.
+2. Profile creation and public visibility.
+3. Connection request send, accept, decline, cancel, and removal.
+4. Recommendations and favorites.
+5. Messages in both directions, including unread and delivery states.
+6. Forum posts, images, comments, replies, likes, sharing, and editing windows.
+7. Live notifications without refreshing either browser.
+8. Read, unread, mark-all-read, grouping, and thread mute behavior.
+9. A real notification email through the scheduled digest endpoint.
+10. AI search with an indexed approved source and visible citations.
 
-## Ready-to-Paste Prompt for a New Session
+## Known Product Gaps
 
-```text
-Continue the Detroit Connect project in:
-/Users/saanchiagarwal/Documents/Think Technologies/detroit-connect-app
+- Production hosting and a custom domain still need to be finalized.
+- The approved website and file ingestion workflow for AI search is incomplete.
+- The administrator moderation experience is not yet complete.
+- Forum posts cannot yet be edited or deleted.
+- Recommendations do not have a dedicated remove control.
+- External email, OAuth, map tiles, and AI responses require staging tests with
+  the client-owned services.
 
-First read AGENTS.md, DETROIT_CONNECT_HANDOFF.md, and README.md. Then inspect
-the current Git status and run npm run check. Do not modify or stage unrelated
-files elsewhere in the Think Technologies repository.
+## Important Files
 
-The approved design is the clean editorial layout in approved-theme.css with
-the permanent desktop left navigation, white/light-gray canvas, deep
-blue-green typography, restrained gold accents, and page-specific controlled
-accents. Do not restore earlier floating-header, beige, dark holographic, or
-photo-heavy experimental themes.
+- `README.md`: setup, environment, notification, and AI indexing instructions.
+- `TESTING.md`: automated coverage and manual staging checklist.
+- `.env.example`: required configuration names without secrets.
+- `src/app/approved-theme.css`: approved visual system.
+- `src/components/app-header.tsx`: shared navigation and live badges.
+- `src/lib/notifications/repository.ts`: notification aggregation and state.
+- `src/lib/notifications/email-delivery.ts`: email digest selection and delivery.
+- `src/lib/search/`: search, retrieval, and AI answer logic.
+- `supabase/migrations/`: complete database migration history.
 
-Supabase production mode is configured locally. Never expose or commit
-.env.local or secrets. Preserve RLS and authenticated ownership rules.
+## Handoff Rules
 
-The next major milestone is the AI search and knowledge layer: approved file
-uploads and website sources, extraction/chunking, embeddings with pgvector,
-hybrid connector plus semantic retrieval, cited answers, and a collapsible
-source panel. Before implementing, inspect the existing schema and propose a
-tightly scoped plan that preserves all current workflows.
-```
+- Preserve the approved interface unless a change is explicitly requested.
+- Do not expose or commit credentials.
+- Keep Supabase RLS and authenticated ownership rules intact.
+- Do not treat local demo behavior as proof that production integrations work.
+- Run lint, build, and the relevant Playwright tests before pushing changes.
+- Confirm database migrations and external-service behavior in staging before
+  claiming production readiness.

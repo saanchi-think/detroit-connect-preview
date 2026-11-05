@@ -14,12 +14,26 @@ type DeliverySetting = {
 };
 
 type DeliveryEvent = {
+  actor_id: string | null;
   created_at: string;
   detail: string;
+  group_key: string;
   href: string;
   id: string;
   kind: "friend" | "recommendation" | "comment" | "mention" | "message";
   title: string;
+};
+
+type DeliverySafetyControl = {
+  actor_id: string;
+  blocked_at: string | null;
+  muted_at: string | null;
+  target_id: string;
+};
+
+type MutedForumPost = {
+  post_id: string;
+  user_id: string;
 };
 
 type DeliveryProfile = {
@@ -177,6 +191,38 @@ export async function deliverNotificationEmails(now = new Date()) {
   const profiles = new Map(
     (profileRows as DeliveryProfile[]).map((profile) => [profile.id, profile]),
   );
+  const [{ data: safetyRows, error: safetyError }, { data: mutedPostRows, error: mutedPostsError }] =
+    await Promise.all([
+      admin
+        .from("user_safety_controls")
+        .select("actor_id, target_id, blocked_at, muted_at")
+        .in("actor_id", userIds),
+      admin
+        .from("forum_post_subscriptions")
+        .select("user_id, post_id")
+        .in("user_id", userIds)
+        .eq("status", "muted"),
+    ]);
+
+  if (safetyError || mutedPostsError) {
+    throw new Error(
+      `Could not load notification suppression controls: ${(safetyError ?? mutedPostsError)!.message}`,
+    );
+  }
+
+  const suppressedActorsByUser = new Map<string, Set<string>>();
+  (safetyRows as DeliverySafetyControl[]).forEach((control) => {
+    if (!control.blocked_at && !control.muted_at) return;
+    const actorIds = suppressedActorsByUser.get(control.actor_id) ?? new Set<string>();
+    actorIds.add(control.target_id);
+    suppressedActorsByUser.set(control.actor_id, actorIds);
+  });
+  const mutedPostsByUser = new Map<string, Set<string>>();
+  (mutedPostRows as MutedForumPost[]).forEach((subscription) => {
+    const postIds = mutedPostsByUser.get(subscription.user_id) ?? new Set<string>();
+    postIds.add(subscription.post_id);
+    mutedPostsByUser.set(subscription.user_id, postIds);
+  });
   let delivered = 0;
   let recipients = 0;
 
@@ -187,7 +233,7 @@ export async function deliverNotificationEmails(now = new Date()) {
     const cutoff = setting.last_email_digest_at ?? setting.updated_at;
     const { data: eventRows, error: eventsError } = await admin
       .from("notification_events")
-      .select("id, kind, title, detail, href, created_at")
+      .select("id, actor_id, kind, title, detail, href, group_key, created_at")
       .eq("recipient_id", setting.user_id)
       .gt("created_at", cutoff)
       .is("email_sent_at", null)
@@ -198,9 +244,16 @@ export async function deliverNotificationEmails(now = new Date()) {
       throw new Error(`Could not load pending notification emails: ${eventsError.message}`);
     }
 
-    const events = (eventRows as DeliveryEvent[]).filter((event) =>
-      eventIsEnabled(event, setting),
-    );
+    const suppressedActors = suppressedActorsByUser.get(setting.user_id) ?? new Set<string>();
+    const mutedPosts = mutedPostsByUser.get(setting.user_id) ?? new Set<string>();
+    const events = (eventRows as DeliveryEvent[]).filter((event) => {
+      if (!eventIsEnabled(event, setting)) return false;
+      if (event.actor_id && suppressedActors.has(event.actor_id)) return false;
+      return !Array.from(mutedPosts).some((postId) =>
+        event.group_key === `forum-comment:${postId}` ||
+        event.group_key === `forum-mention:${postId}`,
+      );
+    });
     if (events.length === 0) continue;
 
     const frequency = normalizeFrequency(setting.email_digest_frequency);

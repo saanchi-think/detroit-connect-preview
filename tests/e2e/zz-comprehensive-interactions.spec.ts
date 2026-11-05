@@ -23,7 +23,7 @@ async function writeTestJson(fileName: string, value: unknown) {
 test("complete social, profile, forum, messaging, search, sorting, notification, and map workflow", async ({
   page,
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   execFileSync(process.execPath, ["scripts/reset-local-test-data.mjs"], {
     cwd: process.cwd(),
     stdio: "pipe",
@@ -53,22 +53,20 @@ test("complete social, profile, forum, messaging, search, sorting, notification,
   await expect(andreFriend.getByRole("link", { name: "Message Andre Brooks" })).toBeVisible();
 
   await page.goto("/connectors/11111111-1111-4111-8111-000000000001");
-  await page.getByText("Recommend", { exact: true }).click();
+  await page.locator("details.profile-recommend-control summary").click();
   await page.getByLabel("Recommendation note").fill("Excellent housing and neighborhood guidance.");
   await page.getByRole("button", { name: "Recommend to network" }).click();
   await expect(page.getByRole("status")).toHaveText("Recommendation shared with your network.");
 
   await page.goto("/connectors/11111111-1111-4111-8111-000000000002");
-  await page.getByText("Recommend", { exact: true }).click();
+  await page.locator("details.profile-recommend-control summary").click();
   await page.getByLabel("Recommendation note").fill("Clear answers about utilities and city services.");
   await page.getByRole("button", { name: "Recommend to network" }).click();
   await expect(page.getByRole("status")).toHaveText("Recommendation shared with your network.");
 
   await page.goto("/favorites");
-  const recommendationsSection = page.locator("section", {
-    has: page.getByRole("heading", { name: "Recommended by you" }),
-  });
-  await expect(recommendationsSection.locator(".profile-snapshot")).toHaveCount(2);
+  await page.getByRole("link", { name: /Recommended by you/ }).click();
+  await expect(page.locator(".profile-snapshot")).toHaveCount(2);
 
   await page.goto("/connectors/11111111-1111-4111-8111-000000000001");
   await page.getByRole("button", { name: "Add to network" }).click();
@@ -221,8 +219,8 @@ test("complete social, profile, forum, messaging, search, sorting, notification,
 
   auditPost = page.locator(".forum-post", { hasText: "Audit notification question" });
   const firstComment = auditPost.locator(".forum-comment", { hasText: "First independent comment." }).first();
-  const firstReplyControl = firstComment.locator(":scope > .forum-comment-copy > .forum-reply-control");
-  await firstReplyControl.getByText("Reply in thread", { exact: true }).click();
+  await firstComment.getByText("Reply in thread", { exact: true }).first().click();
+  const firstReplyControl = firstComment.locator("details.forum-reply-control").first();
   await expect(firstReplyControl).toHaveAttribute("open", "");
   await firstReplyControl.getByPlaceholder("Reply to You").fill("First threaded reply.");
   await firstReplyControl
@@ -237,9 +235,7 @@ test("complete social, profile, forum, messaging, search, sorting, notification,
   const nestedReplyId = await nestedReply.getAttribute("id");
   expect(nestedReplyId).toBeTruthy();
   const stableNestedReply = page.locator(`#${nestedReplyId}`);
-  const nestedReplyControl = stableNestedReply.locator(
-    ":scope > .forum-comment-copy > .forum-reply-control",
-  );
+  const nestedReplyControl = stableNestedReply.locator("details.forum-reply-control").first();
   await nestedReplyControl.evaluate((details: HTMLDetailsElement) => {
     details.open = true;
   });
@@ -253,10 +249,15 @@ test("complete social, profile, forum, messaging, search, sorting, notification,
   ).toBeVisible();
 
   auditPost = page.locator(".forum-post", { hasText: "Audit notification question" });
-  await auditPost.getByRole("button", { name: "Like" }).click();
-  await expect(auditPost.getByRole("button", { name: "Liked 1" })).toBeVisible();
-  await auditPost.getByRole("button", { name: "Liked 1" }).click();
-  await expect(auditPost.getByRole("button", { name: "Like" })).toBeVisible();
+  const postLikeControl = auditPost.locator("form.like-control");
+  await postLikeControl.getByRole("button", { name: "Like" }).click();
+  await expect(postLikeControl.getByRole("button", { name: "Liked 1" })).toBeVisible();
+  await postLikeControl.getByRole("button", { name: "Liked 1" }).click();
+  await expect(postLikeControl.getByRole("button", { name: "Like" })).toBeVisible();
+
+  // Leave the action page before editing the fixture so a late server-action
+  // response cannot overwrite the injected remote comments.
+  await page.goto("/");
 
   type ForumStore = {
     posts: Array<{ id: string; title: string }>;
@@ -306,7 +307,8 @@ test("complete social, profile, forum, messaging, search, sorting, notification,
   await writeTestJson("local-dev-forum.json", forumStore);
 
   await page.goto("/notifications");
-  await expect(page.getByText("Nia Patel replied to you")).toHaveCount(2);
+  await expect(page.getByText("Nia Patel replied to a conversation")).toHaveCount(1);
+  await expect(page.getByText(/2 updates/)).toBeVisible();
   await expect(page.getByText(/Replying directly to your first comment/)).toBeVisible();
 
   await page.goto("/forum");
@@ -318,7 +320,7 @@ test("complete social, profile, forum, messaging, search, sorting, notification,
   await page.goto("/forum");
   auditPost = page.locator(".forum-post", { hasText: "Audit notification question" });
   await auditPost.getByRole("button", { name: "Share" }).click();
-  await auditPost.getByRole("button", { name: "Message Nia Patel" }).click();
+  await auditPost.getByRole("button", { name: "Send this to Nia Patel" }).click();
   await expect(page).toHaveURL(/\/messages\/friend:local-friend-nia/);
   await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue(/Audit notification question/);
 

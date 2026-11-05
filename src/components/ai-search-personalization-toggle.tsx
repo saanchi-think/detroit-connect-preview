@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 type AiSearchPersonalizationToggleProps = {
@@ -17,7 +17,6 @@ export function AiSearchPersonalizationToggle({
   signals,
 }: AiSearchPersonalizationToggleProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
   const [isEnabled, setIsEnabled] = useState(enabled);
 
   function updatePersonalization(nextEnabled: boolean) {
@@ -26,9 +25,9 @@ export function AiSearchPersonalizationToggle({
     if (history) params.set("history", history);
     if (!nextEnabled) params.set("personalized", "0");
 
-    startTransition(() => {
-      router.replace(`/search?${params.toString()}`, { scroll: false });
-    });
+    const href = `/search?${params.toString()}`;
+    router.replace(href, { scroll: false });
+    window.history.replaceState(window.history.state, "", href);
   }
 
   return (
@@ -45,7 +44,6 @@ export function AiSearchPersonalizationToggle({
         <span className="sr-only">Personalize matches using my profile</span>
         <input
           checked={isEnabled}
-          disabled={isPending}
           onChange={(event) => updatePersonalization(event.target.checked)}
           role="switch"
           type="checkbox"

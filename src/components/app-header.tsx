@@ -56,16 +56,69 @@ export function AppHeader() {
         .catch(() => undefined);
     }
 
+    function announceRealtimeUpdate(kind: "messages" | "notifications") {
+      window.dispatchEvent(new CustomEvent(`detroit-connect:${kind}-updated`));
+    }
+
     refreshUnreadMessages();
     refreshUnreadNotifications();
 
     try {
       const supabase = createClient();
+      let realtimeChannels: ReturnType<typeof supabase.channel>[] = [];
+
+      function clearRealtimeChannels() {
+        realtimeChannels.forEach((channel) => {
+          void supabase.removeChannel(channel);
+        });
+        realtimeChannels = [];
+      }
+
+      function subscribeToRealtime(userId: string) {
+        clearRealtimeChannels();
+
+        const notificationChannel = supabase
+          .channel(`notification-events:${userId}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "notification_events",
+              filter: `recipient_id=eq.${userId}`,
+            },
+            (payload) => {
+              refreshUnreadNotifications();
+              announceRealtimeUpdate("notifications");
+              const eventKind = "kind" in payload.new ? payload.new.kind : undefined;
+              if (eventKind === "message") {
+                refreshUnreadMessages();
+                announceRealtimeUpdate("messages");
+              }
+            },
+          )
+          .subscribe();
+
+        const messageChannel = supabase
+          .channel(`direct-messages:${userId}`)
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "direct_messages" },
+            () => {
+              refreshUnreadMessages();
+              announceRealtimeUpdate("messages");
+            },
+          )
+          .subscribe();
+
+        realtimeChannels = [notificationChannel, messageChannel];
+      }
 
       supabase.auth
         .getUser()
         .then(({ data }) => {
           setEmail(data.user?.email ?? null);
+          if (data.user) subscribeToRealtime(data.user.id);
         })
         .catch(() => undefined);
 
@@ -75,9 +128,21 @@ export function AppHeader() {
         setEmail(session?.user.email ?? null);
         refreshUnreadMessages();
         refreshUnreadNotifications();
+        if (session?.user) subscribeToRealtime(session.user.id);
+        else clearRealtimeChannels();
       });
 
-      return () => subscription.unsubscribe();
+      const refreshOnFocus = () => {
+        refreshUnreadMessages();
+        refreshUnreadNotifications();
+      };
+      window.addEventListener("focus", refreshOnFocus);
+
+      return () => {
+        subscription.unsubscribe();
+        clearRealtimeChannels();
+        window.removeEventListener("focus", refreshOnFocus);
+      };
     } catch {
       return undefined;
     }
